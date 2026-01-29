@@ -3,15 +3,15 @@ from dataclasses import dataclass
 from typing import Any, Optional
 import re
 
-# Day patterns with normalization
+# Day patterns with normalization (include plurals)
 DAY_PATTERNS = {
-    r"\b(mon|monday)\b": "monday",
-    r"\b(tue|tues|tuesday)\b": "tuesday",
-    r"\b(wed|wednesday)\b": "wednesday",
-    r"\b(thu|thurs|thursday)\b": "thursday",
-    r"\b(fri|friday)\b": "friday",
-    r"\b(sat|saturday)\b": "saturday",
-    r"\b(sun|sunday)\b": "sunday",
+    r"\b(mon|monday|mondays)\b": "monday",
+    r"\b(tue|tues|tuesday|tuesdays)\b": "tuesday",
+    r"\b(wed|wednesday|wednesdays)\b": "wednesday",
+    r"\b(thu|thurs|thursday|thursdays)\b": "thursday",
+    r"\b(fri|friday|fridays)\b": "friday",
+    r"\b(sat|saturday|saturdays)\b": "saturday",
+    r"\b(sun|sunday|sundays)\b": "sunday",
     r"\btoday\b": "today",
     r"\btomorrow\b": "tomorrow",
 }
@@ -21,6 +21,32 @@ TIME_WINDOW_PATTERNS = {
     r"\bafternoon\b": "afternoon",
     r"\bevening\b": "evening",
 }
+
+# Patterns for inferring time window from numeric ranges
+# "after 12", "from 12", "between 12 and 3", "12-3"
+TIME_RANGE_PATTERN = re.compile(
+    r"(?:after|from|between)?\s*(\d{1,2})(?:\s*(?:pm|am))?\s*(?:and|to|but before|-|–)?\s*(\d{1,2})?(?:\s*(?:pm|am))?",
+    re.IGNORECASE
+)
+
+
+def _infer_time_window_from_hours(hour_start: int, hour_end: Optional[int] = None) -> Optional[str]:
+    """Infer time window from hour range. Hours should be in 24h format or contextual 12h."""
+    # Normalize hours (assume PM for 1-6 when no AM/PM given)
+    if hour_start < 7:
+        hour_start += 12  # 1-6 → 13-18 (afternoon/evening)
+
+    if hour_end is not None and hour_end < 7:
+        hour_end += 12
+
+    # Determine window based on start hour
+    if 5 <= hour_start < 12:
+        return "morning"
+    elif 12 <= hour_start < 17:
+        return "afternoon"
+    elif hour_start >= 17 or hour_start < 5:
+        return "evening"
+    return None
 
 # Matches times like "2pm", "2:30pm", "14:00", "2 pm"
 TIME_REGEX = re.compile(r"\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\b", re.IGNORECASE)
@@ -52,7 +78,7 @@ def extract_signals(text: str) -> Signals:
             signals.day = day_name
             break
 
-    # Extract time window
+    # Extract time window (explicit keywords first)
     for pattern, window in TIME_WINDOW_PATTERNS.items():
         if re.search(pattern, t):
             signals.time_window = window
@@ -65,6 +91,14 @@ def extract_signals(text: str) -> Signals:
         minutes = time_match.group(2) or "00"
         ampm = (time_match.group(3) or "").lower()
         signals.explicit_time = f"{hour}:{minutes}{ampm}".strip(":")
+
+    # If no explicit time window found, try to infer from numeric times
+    if signals.time_window is None and signals.explicit_time:
+        try:
+            hour_val = int(signals.explicit_time.split(":")[0])
+            signals.time_window = _infer_time_window_from_hours(hour_val)
+        except (ValueError, IndexError):
+            pass
 
     return signals
 

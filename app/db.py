@@ -1,7 +1,19 @@
 import asyncpg
+import json
 from .config import settings
 
 _pool: asyncpg.Pool | None = None
+
+
+async def _init_connection(conn: asyncpg.Connection) -> None:
+    """Initialize connection with JSON codec for JSONB columns."""
+    await conn.set_type_codec(
+        "jsonb",
+        encoder=json.dumps,
+        decoder=json.loads,
+        schema="pg_catalog",
+    )
+
 
 async def init_db_pool() -> asyncpg.Pool:
     global _pool
@@ -13,6 +25,7 @@ async def init_db_pool() -> asyncpg.Pool:
             min_size=1,
             max_size=10,
             command_timeout=30,
+            init=_init_connection,
         )
     return _pool
 
