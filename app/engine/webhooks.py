@@ -203,6 +203,15 @@ async def _ingest(
                     normalized.source_event_id,
                 )
 
+        # Capture the lead's previous stage before the upsert overwrites it
+        prior_stage: Optional[str] = await conn.fetchval(
+            "SELECT current_stage FROM engine.leads "
+            "WHERE tenant_id = $1::uuid AND provider = $2::text AND external_id = $3::text",
+            tenant_id,
+            provider,
+            normalized.lead_external_id,
+        )
+
         lead_id = await upsert_lead(
             conn,
             tenant_id=tenant_id,
@@ -226,6 +235,7 @@ async def _ingest(
             source=f"crm_webhook:{provider}",
             occurred_at=normalized.occurred_at,
             canonical_stage=canonical_stage,
+            from_stage=prior_stage if normalized.event_type == "stage_changed" else None,
             to_stage=canonical_stage if normalized.event_type == "stage_changed" else None,
             source_event_id=normalized.source_event_id,
             actor=f"webhook:{provider}",
