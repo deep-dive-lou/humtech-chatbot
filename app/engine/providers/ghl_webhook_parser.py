@@ -130,7 +130,6 @@ def parse_ghl_webhook(payload: dict[str, Any]) -> NormalizedWebhookEvent:
             "webhook_id",
             "eventId",
             "event_id",
-            "id",
             "messageId",
             "deliveryId",
         )
