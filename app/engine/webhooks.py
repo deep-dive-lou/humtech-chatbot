@@ -210,6 +210,7 @@ async def _ingest(
             external_id=normalized.lead_external_id,
             contact_provider=provider,
             contact_external_id=normalized.contact_external_id,
+            name=normalized.lead_name,
             current_stage=canonical_stage,
             raw_stage=normalized.raw_stage,
             source=f"webhook:{provider}",

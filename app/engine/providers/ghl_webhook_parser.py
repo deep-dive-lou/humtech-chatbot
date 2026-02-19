@@ -20,6 +20,7 @@ class NormalizedWebhookEvent:
     lead_value: Optional[float]
     raw_payload: dict[str, Any]
     location_id: Optional[str]
+    lead_name: Optional[str]
 
 
 def _deep_get(data: dict[str, Any], *path: str) -> Any:
@@ -86,8 +87,8 @@ def parse_ghl_webhook(payload: dict[str, Any]) -> NormalizedWebhookEvent:
             "lead_id",
         )
         or (opportunity.get("id") if isinstance(opportunity, dict) else None)
-        or _first_non_empty(payload, "contactId", "contact_id")
         or _first_non_empty(payload, "id")
+        or _first_non_empty(payload, "contactId", "contact_id")
     )
     if not lead_external_id:
         raise ValueError("Missing lead external id in GHL webhook payload")
@@ -108,6 +109,9 @@ def parse_ghl_webhook(payload: dict[str, Any]) -> NormalizedWebhookEvent:
     event_type = "lead_created"
     raw_lower = event_type_raw.lower()
     if "stage" in raw_lower or "status" in raw_lower or "pipeline" in raw_lower:
+        event_type = "stage_changed"
+    # GHL contact webhooks have no type field — infer from presence of raw_stage
+    if event_type == "lead_created" and raw_stage:
         event_type = "stage_changed"
 
     occurred_at = _parse_dt(
@@ -151,6 +155,24 @@ def parse_ghl_webhook(payload: dict[str, Any]) -> NormalizedWebhookEvent:
         or (opportunity.get("monetaryValue") if isinstance(opportunity, dict) else None)
     )
 
+    contact_obj = contact if isinstance(contact, dict) else {}
+    _first = (
+        _deep_get(contact_obj, "firstName")
+        or _first_non_empty(payload, "firstName", "first_name")
+    )
+    _last = (
+        _deep_get(contact_obj, "lastName")
+        or _first_non_empty(payload, "lastName", "last_name")
+    )
+    if _first or _last:
+        lead_name: Optional[str] = " ".join(p for p in [_first, _last] if p) or None
+    else:
+        lead_name = (
+            _deep_get(contact_obj, "name")
+            or _deep_get(contact_obj, "fullName")
+            or _first_non_empty(payload, "fullName", "contactName", "contact_name")
+        )
+
     return NormalizedWebhookEvent(
         tenant_id=tenant_id,
         provider="ghl",
@@ -163,5 +185,6 @@ def parse_ghl_webhook(payload: dict[str, Any]) -> NormalizedWebhookEvent:
         lead_value=lead_value,
         raw_payload=payload,
         location_id=location_id,
+        lead_name=lead_name,
     )
 
