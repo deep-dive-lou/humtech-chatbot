@@ -87,6 +87,7 @@ def parse_ghl_webhook(payload: dict[str, Any]) -> NormalizedWebhookEvent:
         )
         or (opportunity.get("id") if isinstance(opportunity, dict) else None)
         or _first_non_empty(payload, "contactId", "contact_id")
+        or _first_non_empty(payload, "id")
     )
     if not lead_external_id:
         raise ValueError("Missing lead external id in GHL webhook payload")
@@ -98,7 +99,7 @@ def parse_ghl_webhook(payload: dict[str, Any]) -> NormalizedWebhookEvent:
     )
 
     raw_stage = (
-        _first_non_empty(payload, "stage", "stageName", "pipelineStage")
+        _first_non_empty(payload, "stage", "stageName", "pipelineStage", "pipleline_stage", "pipeline_stage")
         or (opportunity.get("stage") if isinstance(opportunity, dict) else None)
         or _deep_get(payload, "meta", "stage")
     )
@@ -134,6 +135,8 @@ def parse_ghl_webhook(payload: dict[str, Any]) -> NormalizedWebhookEvent:
 
     location_id = (
         _first_non_empty(payload, "locationId", "location_id")
+        or _deep_get(payload, "location", "id")
+        or _deep_get(payload, "customData", "locationId")
         or _deep_get(payload, "meta", "locationId")
         or _deep_get(opportunity if isinstance(opportunity, dict) else {}, "locationId")
     )
