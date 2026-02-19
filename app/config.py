@@ -11,4 +11,11 @@ class Settings:
     worker_id: str = os.getenv("WORKER_ID", "worker-1")
     database_url: str = os.getenv("DATABASE_URL", "")
 
+    # Outreach pipeline
+    apollo_api_key: str = os.getenv("APOLLO_API_KEY", "")
+    proxycurl_api_key: str = os.getenv("PROXYCURL_API_KEY", "")
+    anthropic_api_key: str = os.getenv("ANTHROPIC_API_KEY", "")
+    instantly_api_key: str = os.getenv("INSTANTLY_API_KEY", "")
+    instantly_campaign_id: str = os.getenv("INSTANTLY_CAMPAIGN_ID", "")
+
 settings = Settings()

@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Outreach Review — {{ batch_date }}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .rung-badge { @apply text-xs font-medium px-2 py-0.5 rounded-full; }
+    .conf-high  { @apply bg-green-100 text-green-800; }
+    .conf-mid   { @apply bg-yellow-100 text-yellow-800; }
+    .conf-low   { @apply bg-red-100 text-red-800; }
+  </style>
+</head>
+<body class="bg-gray-50 text-gray-900 min-h-screen">
+
+  <!-- Header -->
+  <div class="bg-white border-b border-gray-200 sticky top-0 z-10">
+    <div class="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
+      <div>
+        <h1 class="text-lg font-semibold">Outreach Review</h1>
+        <p class="text-sm text-gray-500">{{ batch_date }}</p>
+      </div>
+      <div class="flex items-center gap-4">
+        <div class="text-sm text-gray-500 hidden sm:block">
+          <span class="text-green-700 font-medium">{{ counts.auto_send }}</span> auto-send &nbsp;·&nbsp;
+          <span class="text-yellow-700 font-medium">{{ counts.needs_review }}</span> review &nbsp;·&nbsp;
+          <span class="text-red-700 font-medium">{{ counts.blocked }}</span> blocked
+        </div>
+        <button
+          id="send-btn"
+          onclick="sendBatch()"
+          class="bg-gray-900 text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-gray-700 transition disabled:opacity-40 disabled:cursor-not-allowed"
+          {% if counts.auto_send == 0 and counts.needs_review == 0 %}disabled{% endif %}
+        >
+          Send {{ counts.auto_send + counts.needs_review }} →
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="max-w-4xl mx-auto px-6 py-8 space-y-10">
+
+    <!-- Needs Review -->
+    {% if needs_review %}
+    <section>
+      <h2 class="text-sm font-semibold uppercase tracking-wide text-yellow-700 mb-3">
+        ⚠ Needs Review ({{ needs_review|length }})
+      </h2>
+      <div class="space-y-3">
+        {% for lead in needs_review %}
+        {{ lead_card(lead) }}
+        {% endfor %}
+      </div>
+    </section>
+    {% endif %}
+
+    <!-- Auto Send -->
+    {% if auto_send %}
+    <section>
+      <button onclick="toggleAutoSend()" class="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-green-700 mb-3 hover:text-green-900">
+        <span id="auto-send-icon">▾</span>
+        ✓ Auto-Send ({{ auto_send|length }})
+      </button>
+      <div id="auto-send-list" class="space-y-3">
+        {% for lead in auto_send %}
+        {{ lead_card(lead) }}
+        {% endfor %}
+      </div>
+    </section>
+    {% endif %}
+
+    <!-- Blocked -->
+    {% if blocked %}
+    <section>
+      <button onclick="toggleBlocked()" class="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-gray-400 mb-3 hover:text-gray-600">
+        <span id="blocked-icon">▸</span>
+        ✗ Blocked ({{ blocked|length }})
+      </button>
+      <div id="blocked-list" class="space-y-3 hidden">
+        {% for lead in blocked %}
+        {{ lead_card(lead, readonly=True) }}
+        {% endfor %}
+      </div>
+    </section>
+    {% endif %}
+
+    {% if not needs_review and not auto_send and not blocked %}
+    <div class="text-center py-20 text-gray-400">
+      <p class="text-lg">No batch for {{ batch_date }}</p>
+      <p class="text-sm mt-1">Run the pipeline to generate today's leads.</p>
+    </div>
+    {% endif %}
+
+  </div>
+
+  <!-- Notification toast -->
+  <div id="toast" class="fixed bottom-6 right-6 bg-gray-900 text-white text-sm px-4 py-3 rounded-lg shadow-lg hidden transition-all">
+    <span id="toast-msg"></span>
+  </div>
+
+</body>
+</html>
+
+{% macro lead_card(lead, readonly=False) %}
+<div id="card-{{ lead.personalisation_id }}" class="bg-white border border-gray-200 rounded-xl p-5">
+  <div class="flex items-start justify-between gap-4">
+    <div class="min-w-0">
+      <p class="font-medium text-gray-900">
+        {{ lead.first_name }} {{ lead.last_name or '' }}
+        <span class="text-gray-400 font-normal">· {{ lead.title or '—' }} · {{ lead.company or '—' }}</span>
+      </p>
+      <p class="text-xs text-gray-400 mt-0.5">{{ lead.email }}</p>
+    </div>
+    <div class="flex items-center gap-2 shrink-0">
+      <span class="rung-badge bg-gray-100 text-gray-600">Rung {{ lead.rung }}</span>
+      <span class="rung-badge
+        {% if lead.confidence_score >= 0.7 %}conf-high
+        {% elif lead.confidence_score >= 0.4 %}conf-mid
+        {% else %}conf-low{% endif %}">
+        {{ (lead.confidence_score * 100)|int }}%
+      </span>
+    </div>
+  </div>
+
+  <!-- Opener -->
+  <div class="mt-3">
+    <p id="opener-text-{{ lead.personalisation_id }}"
+       class="text-sm text-gray-800 italic"
+       onclick="{% if not readonly %}startEdit('{{ lead.personalisation_id }}'){% endif %}"
+       title="{% if not readonly %}Click to edit{% endif %}">
+      "{{ lead.edited_opener or lead.opener_first_line }}"
+    </p>
+    <div id="opener-edit-{{ lead.personalisation_id }}" class="hidden mt-2">
+      <textarea
+        id="opener-textarea-{{ lead.personalisation_id }}"
+        class="w-full text-sm border border-gray-300 rounded-lg p-2 resize-none focus:outline-none focus:ring-2 focus:ring-gray-400"
+        rows="2"
+      ></textarea>
+      <div class="flex gap-2 mt-1">
+        <button onclick="saveEdit('{{ lead.personalisation_id }}')"
+                class="text-xs bg-gray-900 text-white px-3 py-1 rounded-md hover:bg-gray-700">Save</button>
+        <button onclick="cancelEdit('{{ lead.personalisation_id }}')"
+                class="text-xs text-gray-500 px-3 py-1 rounded-md hover:bg-gray-100">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  {% if lead.evidence_used %}
+  <p class="text-xs text-gray-400 mt-2">
+    Signal: {{ lead.evidence_used[0].signal_key if lead.evidence_used else '—' }}
+  </p>
+  {% endif %}
+
+  {% if not readonly %}
+  <div class="flex gap-2 mt-3">
+    <button onclick="startEdit('{{ lead.personalisation_id }}')"
+            class="text-xs text-gray-500 hover:text-gray-900 underline">Edit opener</button>
+    <button onclick="removeLead('{{ lead.personalisation_id }}')"
+            class="text-xs text-red-400 hover:text-red-600 underline">Remove</button>
+  </div>
+  {% else %}
+  <p class="text-xs text-red-400 mt-3">
+    Blocked — {{ lead.risk_flags | join(', ') if lead.risk_flags else 'low confidence' }}
+  </p>
+  {% endif %}
+</div>
+{% endmacro %}
+
+<script>
+  // --- Edit opener ---
+  function startEdit(id) {
+    const text = document.getElementById(`opener-text-${id}`).textContent.trim().replace(/^"|"$/g, '');
+    document.getElementById(`opener-textarea-${id}`).value = text;
+    document.getElementById(`opener-text-${id}`).classList.add('hidden');
+    document.getElementById(`opener-edit-${id}`).classList.remove('hidden');
+  }
+
+  function cancelEdit(id) {
+    document.getElementById(`opener-text-${id}`).classList.remove('hidden');
+    document.getElementById(`opener-edit-${id}`).classList.add('hidden');
+  }
+
+  async function saveEdit(id) {
+    const opener = document.getElementById(`opener-textarea-${id}`).value.trim();
+    if (!opener) return;
+    const resp = await fetch(`/outreach/lead/${id}/edit`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({opener}),
+    });
+    if (resp.ok) {
+      document.getElementById(`opener-text-${id}`).textContent = `"${opener}"`;
+      cancelEdit(id);
+      toast('Opener saved');
+    } else {
+      toast('Save failed — try again', true);
+    }
+  }
+
+  // --- Remove lead ---
+  async function removeLead(id) {
+    const resp = await fetch(`/outreach/lead/${id}/remove`, {method: 'POST'});
+    if (resp.ok) {
+      const card = document.getElementById(`card-${id}`);
+      card.style.opacity = '0';
+      card.style.transition = 'opacity 0.2s';
+      setTimeout(() => card.remove(), 200);
+      toast('Lead removed');
+    }
+  }
+
+  // --- Send batch ---
+  async function sendBatch() {
+    const btn = document.getElementById('send-btn');
+    if (!confirm(`Send today's batch?`)) return;
+    btn.disabled = true;
+    btn.textContent = 'Sending…';
+    const resp = await fetch(`/outreach/send`, {method: 'POST'});
+    const data = await resp.json();
+    if (resp.ok && data.ok) {
+      btn.textContent = `✓ ${data.sent} sent`;
+      toast(`${data.sent} emails queued in Instantly`);
+    } else {
+      btn.disabled = false;
+      btn.textContent = 'Send →';
+      toast('Send failed — check logs', true);
+    }
+  }
+
+  // --- Toggle sections ---
+  function toggleAutoSend() {
+    const list = document.getElementById('auto-send-list');
+    const icon = document.getElementById('auto-send-icon');
+    list.classList.toggle('hidden');
+    icon.textContent = list.classList.contains('hidden') ? '▸' : '▾';
+  }
+
+  function toggleBlocked() {
+    const list = document.getElementById('blocked-list');
+    const icon = document.getElementById('blocked-icon');
+    list.classList.toggle('hidden');
+    icon.textContent = list.classList.contains('hidden') ? '▸' : '▾';
+  }
+
+  // --- Toast ---
+  function toast(msg, error = false) {
+    const el = document.getElementById('toast');
+    const msgEl = document.getElementById('toast-msg');
+    msgEl.textContent = msg;
+    el.className = `fixed bottom-6 right-6 text-sm px-4 py-3 rounded-lg shadow-lg transition-all ${error ? 'bg-red-600' : 'bg-gray-900'} text-white`;
+    el.classList.remove('hidden');
+    setTimeout(() => el.classList.add('hidden'), 3000);
+  }
+</script>
