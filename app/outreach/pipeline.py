@@ -80,35 +80,74 @@ def load_campaign_config() -> dict[str, Any]:
     return {}
 
 # ---------------------------------------------------------------------------
-# Lead sourcing — Apollo
+# Lead sourcing — Apollo (two-step: org search → people search)
 # ---------------------------------------------------------------------------
 
-async def source_leads(config: dict[str, Any] | None = None, limit: int = 150) -> list[dict[str, Any]]:
-    """Pull ICP-matched prospects from Apollo People Search."""
+async def _search_target_orgs(config: dict[str, Any] | None = None) -> list[str]:
+    """Step 1: Find target org domains via Apollo Organization Search.
+
+    Uses q_organization_keyword_tags, organization_locations etc. which
+    are only supported on the org search endpoint, not api_search.
+    Returns list of primary_domain strings.
+    """
+    if not settings.apollo_api_key:
+        return []
+
+    os_config = (config or {}).get("apollo", {}).get("organization_search", {})
+    if not os_config:
+        logger.warning("No apollo.organization_search config — skipping org search")
+        return []
+
+    payload = {**os_config, "per_page": 100, "page": 1}
+
+    logger.info("Apollo org search filters: %s", {k: v for k, v in payload.items() if k not in ("per_page", "page")})
+
+    domains: list[str] = []
+    async with httpx.AsyncClient(timeout=30) as client:
+        try:
+            resp = await client.post(
+                "https://api.apollo.io/api/v1/mixed_companies/search",
+                json=payload,
+                headers={"Content-Type": "application/json", "X-Api-Key": settings.apollo_api_key},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            orgs = data.get("organizations", []) or data.get("accounts", [])
+            for org in orgs:
+                domain = org.get("primary_domain") or org.get("domain", "")
+                if domain:
+                    domains.append(domain)
+            logger.info("Apollo org search: found %d target orgs with domains", len(domains))
+        except Exception as e:
+            logger.error("Apollo org search failed: %s", e)
+
+    return domains
+
+
+async def source_leads(
+    config: dict[str, Any] | None = None,
+    limit: int = 150,
+    org_domains: list[str] | None = None,
+) -> list[dict[str, Any]]:
+    """Step 2: Find people at target orgs via Apollo People API Search."""
     if not settings.apollo_api_key:
         logger.warning("APOLLO_API_KEY not set — returning empty list")
         return []
 
     ac = (config or {}).get("apollo", {})
 
-    payload = {
+    payload: dict[str, Any] = {
         "person_titles": ac.get("person_titles", APOLLO_TITLES),
         "person_seniorities": ac.get("person_seniorities", APOLLO_SENIORITIES),
-        "contact_email_status_v2": ac.get("contact_email_status_v2", ["verified", "likely to engage"]),
-        "person_locations": ac.get("person_locations", ["United Kingdom"]),
-        "organization_locations": ac.get("organization_locations", ["United Kingdom"]),
-        "organization_num_employees_ranges": ac.get("organization_num_employees_ranges", ["50,500"]),
         "per_page": min(limit, 100),
         "page": 1,
     }
 
-    # Optional filters — only add if present in config
-    for key in ("organization_industries", "organization_revenue_ranges",
-                "q_organization_keyword_tags"):
-        if key in ac:
-            payload[key] = ac[key]
+    # Narrow to target org domains if provided
+    if org_domains:
+        payload["q_organization_domains_list"] = org_domains
 
-    logger.info("Apollo payload filters: %s", {k: v for k, v in payload.items() if k != "per_page" and k != "page"})
+    logger.info("Apollo people search: %d org domains, limit %d", len(org_domains or []), limit)
 
     async with httpx.AsyncClient(timeout=20) as client:
         try:
@@ -492,9 +531,15 @@ async def run_pipeline(batch_date: Optional[date] = None) -> dict[str, Any]:
         "errors": 0,
     }
 
-    # Run Apollo sourcing and Apify hiring fetch concurrently
+    # Step 1: Find target orgs by keyword (debt management etc.)
+    org_domains = await _search_target_orgs(config)
+    if not org_domains:
+        logger.warning("Pipeline: no target orgs found — check campaign.json organization_search config")
+        return stats
+
+    # Step 2: Find people at those orgs + fetch hiring signals concurrently
     search_results, hiring_companies = await asyncio.gather(
-        source_leads(config=config, limit=lead_limit),
+        source_leads(config=config, limit=lead_limit, org_domains=org_domains),
         fetch_hiring_companies(),
     )
     stats["sourced"] = len(search_results)
@@ -503,15 +548,22 @@ async def run_pipeline(batch_date: Optional[date] = None) -> dict[str, Any]:
         logger.warning("Pipeline: no prospects sourced")
         return stats
 
-    # Reveal full contact details (email, last name, linkedin, domain)
+    # Step 3: Reveal full contact details (email, last name, linkedin, domain)
     prospects = await _reveal_contacts(search_results)
 
     if not prospects:
-        logger.warning("Pipeline: no prospects sourced")
+        logger.warning("Pipeline: no contacts revealed")
         return stats
 
     pool = await get_pool()
-    seen_companies: set[str] = set()
+
+    # Pre-load existing company domains from DB for cross-run dedup
+    async with pool.acquire() as conn:
+        existing = await conn.fetch(
+            "SELECT DISTINCT company_domain FROM outreach.leads WHERE company_domain IS NOT NULL AND company_domain != ''"
+        )
+    seen_companies: set[str] = {r["company_domain"] for r in existing}
+    logger.info("Pre-loaded %d existing company domains for dedup", len(seen_companies))
 
     for person in prospects:
         lead = _parse_apollo_person(person)

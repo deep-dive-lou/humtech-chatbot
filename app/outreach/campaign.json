@@ -8,13 +8,13 @@
       "VP Sales", "Director of Sales"
     ],
     "person_seniorities": ["owner", "founder", "c_suite", "vp", "director"],
-    "person_locations": ["United Kingdom"],
-    "organization_locations": ["United Kingdom"],
-    "organization_num_employees_ranges": ["11,500"],
-    "organization_industries": ["financial services"],
-    "q_organization_keyword_tags": ["debt management", "debt consolidation", "debt advice", "debt solutions", "IVA", "debt recovery"],
-    "organization_revenue_ranges": ["1000000,50000000"],
-    "contact_email_status_v2": ["verified", "likely to engage"]
+    "organization_search": {
+      "q_organization_keyword_tags": ["debt management", "debt consolidation", "debt advice", "debt solutions", "IVA", "debt recovery"],
+      "organization_locations": ["United Kingdom"],
+      "organization_num_employees_ranges": ["11,500"],
+      "organization_industries": ["financial services"],
+      "organization_revenue_ranges": ["1000000,50000000"]
+    }
   },
   "personalisation": {
     "template_context": "HumTech offers a done-for-you AI Revenue Engine for debt management and consolidation firms — AI booking bot that converts enquiries into consultations, speed-to-lead automation so no enquiry goes cold, sales process improvement, and full ad management. They only get paid when revenue goes up.",
