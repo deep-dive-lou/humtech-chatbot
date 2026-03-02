@@ -103,6 +103,45 @@ async def source_leads(config: dict[str, Any] | None = None, limit: int = 150) -
             return []
 
 
+async def _reveal_contacts(people: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Reveal masked contacts via Apollo bulk_match (batches of 10, 1 credit each)."""
+    if not people or not settings.apollo_api_key:
+        return []
+
+    revealed = []
+    for i in range(0, len(people), 10):
+        batch = people[i : i + 10]
+        details = [{"id": p["id"]} for p in batch if p.get("id")]
+        if not details:
+            continue
+
+        async with httpx.AsyncClient(timeout=20) as client:
+            try:
+                resp = await client.post(
+                    "https://api.apollo.io/api/v1/people/bulk_match",
+                    json={"details": details},
+                    headers={
+                        "Content-Type": "application/json",
+                        "X-Api-Key": settings.apollo_api_key,
+                    },
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                matches = data.get("matches", [])
+                revealed.extend(matches)
+                logger.info(
+                    "Apollo reveal: %d/%d contacts revealed (batch %d)",
+                    len(matches),
+                    len(details),
+                    i // 10 + 1,
+                )
+            except Exception as e:
+                logger.error("Apollo reveal failed (batch %d): %s", i // 10 + 1, e)
+
+    logger.info("Apollo reveal total: %d contacts with full data", len(revealed))
+    return revealed
+
+
 def _parse_apollo_person(person: dict[str, Any]) -> dict[str, Any]:
     """Normalise an Apollo person record into our lead schema."""
     org = person.get("organization") or {}
@@ -428,11 +467,18 @@ async def run_pipeline(batch_date: Optional[date] = None) -> dict[str, Any]:
     }
 
     # Run Apollo sourcing and Apify hiring fetch concurrently
-    prospects, hiring_companies = await asyncio.gather(
+    search_results, hiring_companies = await asyncio.gather(
         source_leads(config=config, limit=lead_limit),
         fetch_hiring_companies(),
     )
-    stats["sourced"] = len(prospects)
+    stats["sourced"] = len(search_results)
+
+    if not search_results:
+        logger.warning("Pipeline: no prospects sourced")
+        return stats
+
+    # Reveal full contact details (email, last name, linkedin, domain)
+    prospects = await _reveal_contacts(search_results)
 
     if not prospects:
         logger.warning("Pipeline: no prospects sourced")

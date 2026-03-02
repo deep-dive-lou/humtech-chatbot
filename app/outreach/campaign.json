@@ -24,6 +24,6 @@
     }
   },
   "limits": {
-    "leads_per_run": 150
+    "leads_per_run": 40
   }
 }
