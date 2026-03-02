@@ -39,69 +39,6 @@
     </div>
   </div>
 
-  <div class="max-w-4xl mx-auto px-6 py-8 space-y-10">
-
-    <!-- Needs Review -->
-    {% if needs_review %}
-    <section>
-      <h2 class="text-sm font-semibold uppercase tracking-wide text-yellow-700 mb-3">
-        ⚠ Needs Review ({{ needs_review|length }})
-      </h2>
-      <div class="space-y-3">
-        {% for lead in needs_review %}
-        {{ lead_card(lead) }}
-        {% endfor %}
-      </div>
-    </section>
-    {% endif %}
-
-    <!-- Auto Send -->
-    {% if auto_send %}
-    <section>
-      <button onclick="toggleAutoSend()" class="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-green-700 mb-3 hover:text-green-900">
-        <span id="auto-send-icon">▾</span>
-        ✓ Auto-Send ({{ auto_send|length }})
-      </button>
-      <div id="auto-send-list" class="space-y-3">
-        {% for lead in auto_send %}
-        {{ lead_card(lead) }}
-        {% endfor %}
-      </div>
-    </section>
-    {% endif %}
-
-    <!-- Blocked -->
-    {% if blocked %}
-    <section>
-      <button onclick="toggleBlocked()" class="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-gray-400 mb-3 hover:text-gray-600">
-        <span id="blocked-icon">▸</span>
-        ✗ Blocked ({{ blocked|length }})
-      </button>
-      <div id="blocked-list" class="space-y-3 hidden">
-        {% for lead in blocked %}
-        {{ lead_card(lead, readonly=True) }}
-        {% endfor %}
-      </div>
-    </section>
-    {% endif %}
-
-    {% if not needs_review and not auto_send and not blocked %}
-    <div class="text-center py-20 text-gray-400">
-      <p class="text-lg">No batch for {{ batch_date }}</p>
-      <p class="text-sm mt-1">Run the pipeline to generate today's leads.</p>
-    </div>
-    {% endif %}
-
-  </div>
-
-  <!-- Notification toast -->
-  <div id="toast" class="fixed bottom-6 right-6 bg-gray-900 text-white text-sm px-4 py-3 rounded-lg shadow-lg hidden transition-all">
-    <span id="toast-msg"></span>
-  </div>
-
-</body>
-</html>
-
 {% macro lead_card(lead, readonly=False) %}
 <div id="card-{{ lead.personalisation_id }}" class="bg-white border border-gray-200 rounded-xl p-5">
   <div class="flex items-start justify-between gap-4">
@@ -166,6 +103,69 @@
   {% endif %}
 </div>
 {% endmacro %}
+
+  <div class="max-w-4xl mx-auto px-6 py-8 space-y-10">
+
+    <!-- Needs Review -->
+    {% if needs_review %}
+    <section>
+      <h2 class="text-sm font-semibold uppercase tracking-wide text-yellow-700 mb-3">
+        ⚠ Needs Review ({{ needs_review|length }})
+      </h2>
+      <div class="space-y-3">
+        {% for lead in needs_review %}
+        {{ lead_card(lead) }}
+        {% endfor %}
+      </div>
+    </section>
+    {% endif %}
+
+    <!-- Auto Send -->
+    {% if auto_send %}
+    <section>
+      <button onclick="toggleAutoSend()" class="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-green-700 mb-3 hover:text-green-900">
+        <span id="auto-send-icon">▾</span>
+        ✓ Auto-Send ({{ auto_send|length }})
+      </button>
+      <div id="auto-send-list" class="space-y-3">
+        {% for lead in auto_send %}
+        {{ lead_card(lead) }}
+        {% endfor %}
+      </div>
+    </section>
+    {% endif %}
+
+    <!-- Blocked -->
+    {% if blocked %}
+    <section>
+      <button onclick="toggleBlocked()" class="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-gray-400 mb-3 hover:text-gray-600">
+        <span id="blocked-icon">▸</span>
+        ✗ Blocked ({{ blocked|length }})
+      </button>
+      <div id="blocked-list" class="space-y-3 hidden">
+        {% for lead in blocked %}
+        {{ lead_card(lead, readonly=True) }}
+        {% endfor %}
+      </div>
+    </section>
+    {% endif %}
+
+    {% if not needs_review and not auto_send and not blocked %}
+    <div class="text-center py-20 text-gray-400">
+      <p class="text-lg">No batch for {{ batch_date }}</p>
+      <p class="text-sm mt-1">Run the pipeline to generate today's leads.</p>
+    </div>
+    {% endif %}
+
+  </div>
+
+  <!-- Notification toast -->
+  <div id="toast" class="fixed bottom-6 right-6 bg-gray-900 text-white text-sm px-4 py-3 rounded-lg shadow-lg hidden transition-all">
+    <span id="toast-msg"></span>
+  </div>
+
+</body>
+</html>
 
 <script>
   // --- Edit opener ---
