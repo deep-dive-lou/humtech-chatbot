@@ -405,15 +405,12 @@ def _determine_review_status(result: dict[str, Any]) -> str:
     flags = result.get("risk_flags", [])
     confidence = result.get("confidence_score", 0.0)
 
-    if "hallucination_risk" in flags or "privacy_risk" in flags:
-        return "blocked"
-    if confidence < 0.4 or not result.get("opener_first_line"):
-        return "blocked"
-    if confidence < 0.7 or "tone_risk" in flags or "duplication_risk" in flags:
-        return "needs_review"
-    if not result.get("evidence_used"):
-        return "needs_review"
-    return "auto_send"
+    # High confidence + no flags → auto-send
+    if confidence >= 0.7 and not flags and result.get("evidence_used"):
+        return "auto_send"
+
+    # Everything else goes to review — weak personalisation ≠ bad lead
+    return "needs_review"
 
 
 async def _generate_personalisation(
@@ -532,7 +529,6 @@ async def run_pipeline(batch_date: Optional[date] = None) -> dict[str, Any]:
         "enriched": 0,
         "auto_send": 0,
         "needs_review": 0,
-        "blocked": 0,
         "errors": 0,
     }
 
@@ -574,6 +570,7 @@ async def run_pipeline(batch_date: Optional[date] = None) -> dict[str, Any]:
         lead = _parse_apollo_person(person)
 
         if not lead["email"] or not lead["first_name"]:
+            logger.warning("Skipping lead — missing email or name: %s", {k: lead.get(k) for k in ("email", "first_name", "company")})
             stats["errors"] += 1
             continue
 
