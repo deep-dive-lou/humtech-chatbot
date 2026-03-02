@@ -12,17 +12,19 @@ logger = logging.getLogger(__name__)
 INSTANTLY_ADD_LEADS_URL = "https://api.instantly.ai/api/v1/lead/add"
 
 
-async def push_to_instantly(leads: list[dict[str, Any]]) -> dict[str, Any]:
+async def push_to_instantly(leads: list[dict[str, Any]], campaign_id: str | None = None) -> dict[str, Any]:
     """
     Push a list of approved leads to the Instantly campaign.
 
     Each lead dict must have: email, first_name, last_name, company, opener.
+    campaign_id: override from campaign.json (falls back to env var).
     Returns summary: {sent: int, failed: int, errors: list}
     """
     if not settings.instantly_api_key:
         raise RuntimeError("INSTANTLY_API_KEY not configured")
-    if not settings.instantly_campaign_id:
-        raise RuntimeError("INSTANTLY_CAMPAIGN_ID not configured")
+    effective_campaign_id = campaign_id or settings.instantly_campaign_id
+    if not effective_campaign_id:
+        raise RuntimeError("No campaign_id — set INSTANTLY_CAMPAIGN_ID or provide in campaign.json")
 
     instantly_leads = [
         {
@@ -38,7 +40,7 @@ async def push_to_instantly(leads: list[dict[str, Any]]) -> dict[str, Any]:
 
     payload = {
         "api_key": settings.instantly_api_key,
-        "campaign_id": settings.instantly_campaign_id,
+        "campaign_id": effective_campaign_id,
         "skip_if_in_workspace": True,
         "leads": instantly_leads,
     }

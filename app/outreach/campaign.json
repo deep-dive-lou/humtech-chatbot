@@ -1,0 +1,29 @@
+{
+  "campaign_name": "financial-services-q1-2026",
+  "instantly_campaign_id": "76fc48b8-aa92-426e-8291-212fa3b4ee39",
+  "apollo": {
+    "person_titles": [
+      "CEO", "MD", "Managing Director", "Founder", "Co-Founder",
+      "COO", "Commercial Director", "Head of Sales", "Sales Director",
+      "VP Sales", "Director of Sales"
+    ],
+    "person_seniorities": ["owner", "founder", "c_suite", "vp", "director"],
+    "organization_locations": ["United Kingdom"],
+    "organization_num_employees_ranges": ["50,500"],
+    "organization_industries": ["financial services"],
+    "organization_revenue_ranges": ["5000000,50000000"],
+    "contact_email_status_v2": ["verified", "likely to engage"]
+  },
+  "personalisation": {
+    "template_context": "HumTech offers a done-for-you AI Revenue Engine for financial services firms — AI booking bot, speed-to-lead automation, sales process improvement, and full ad management. They only get paid when revenue goes up.",
+    "sector_hints": {
+      "type_of_company": "financial services firms",
+      "ref_service": "financial advice",
+      "reference_outcome": "becoming clients",
+      "industry_name": "financial services"
+    }
+  },
+  "limits": {
+    "leads_per_run": 150
+  }
+}

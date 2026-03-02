@@ -5,6 +5,7 @@ import json
 import logging
 import re
 from datetime import date
+from pathlib import Path
 from typing import Any, Optional
 
 import httpx
@@ -27,13 +28,13 @@ PROMPT_VERSION = "v1.0"
 PERSONALISATION_MODEL = "claude-sonnet-4-6"
 ENRICHMENT_MODEL = "claude-haiku-4-5-20251001"
 
+# Fallback defaults (used when campaign.json is missing)
 TEMPLATE_CONTEXT = (
     "HumTech offers a done-for-you AI Revenue Engine — AI booking bot, "
     "speed-to-lead automation, sales process improvement, and full ad management. "
     "They only get paid when revenue goes up. The email introduces this and asks for a call."
 )
 
-# ICP filters for Apollo
 APOLLO_TITLES = [
     "CEO", "MD", "Managing Director", "Founder", "Co-Founder",
     "COO", "Commercial Director", "Head of Sales", "Sales Director",
@@ -41,25 +42,49 @@ APOLLO_TITLES = [
 ]
 APOLLO_SENIORITIES = ["owner", "founder", "c_suite", "vp", "director"]
 
+CAMPAIGN_CONFIG_PATH = Path(__file__).parent / "campaign.json"
+
+
+def load_campaign_config() -> dict[str, Any]:
+    """Load active campaign config. Falls back to empty dict if missing/invalid."""
+    try:
+        if CAMPAIGN_CONFIG_PATH.exists():
+            with open(CAMPAIGN_CONFIG_PATH) as f:
+                config = json.load(f)
+            logger.info("Loaded campaign config: %s", config.get("campaign_name", "unnamed"))
+            return config
+    except Exception as e:
+        logger.error("Failed to load campaign.json: %s — using defaults", e)
+    return {}
+
 # ---------------------------------------------------------------------------
 # Lead sourcing — Apollo
 # ---------------------------------------------------------------------------
 
-async def source_leads(limit: int = 150) -> list[dict[str, Any]]:
+async def source_leads(config: dict[str, Any] | None = None, limit: int = 150) -> list[dict[str, Any]]:
     """Pull ICP-matched prospects from Apollo People Search."""
     if not settings.apollo_api_key:
         logger.warning("APOLLO_API_KEY not set — returning empty list")
         return []
 
+    ac = (config or {}).get("apollo", {})
+
     payload = {
-        "person_titles": APOLLO_TITLES,
-        "person_seniorities": APOLLO_SENIORITIES,
-        "contact_email_status_v2": ["verified", "likely to engage"],
-        "organization_locations": ["United Kingdom"],
-        "organization_num_employees_ranges": ["50,500"],
+        "person_titles": ac.get("person_titles", APOLLO_TITLES),
+        "person_seniorities": ac.get("person_seniorities", APOLLO_SENIORITIES),
+        "contact_email_status_v2": ac.get("contact_email_status_v2", ["verified", "likely to engage"]),
+        "organization_locations": ac.get("organization_locations", ["United Kingdom"]),
+        "organization_num_employees_ranges": ac.get("organization_num_employees_ranges", ["50,500"]),
         "per_page": min(limit, 100),
         "page": 1,
     }
+
+    # Optional filters — only add if present in config
+    for key in ("organization_industries", "organization_revenue_ranges"):
+        if key in ac:
+            payload[key] = ac[key]
+
+    logger.info("Apollo payload filters: %s", {k: v for k, v in payload.items() if k != "per_page" and k != "page"})
 
     async with httpx.AsyncClient(timeout=20) as client:
         try:
@@ -286,9 +311,13 @@ def _determine_review_status(result: dict[str, Any]) -> str:
 async def _generate_personalisation(
     lead: dict[str, Any],
     signals: dict[str, Any],
+    config: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Run Claude personalisation engine. Returns structured output dict."""
     client = AsyncAnthropic(api_key=settings.anthropic_api_key)
+
+    p_config = (config or {}).get("personalisation", {})
+    template_ctx = p_config.get("template_context", TEMPLATE_CONTEXT)
 
     prompt = f"""You are writing the personalised opening block for a cold email on behalf of HumTech.
 
@@ -298,7 +327,7 @@ The email template is:
 
 Your job: fill in the two bracketed parts to produce two natural sentences that slot into this template.
 
-HumTech context: {TEMPLATE_CONTEXT}
+HumTech context: {template_ctx}
 
 Prospect:
 - Name: {lead['first_name']} {lead.get('last_name', '')}
@@ -381,9 +410,13 @@ async def run_pipeline(batch_date: Optional[date] = None) -> dict[str, Any]:
     Full pipeline: source → enrich → personalise → store.
     Returns summary stats.
     """
+    config = load_campaign_config()
     today = batch_date or date.today()
+    lead_limit = config.get("limits", {}).get("leads_per_run", 150)
+
     stats = {
         "batch_date": today.isoformat(),
+        "campaign": config.get("campaign_name", "default"),
         "sourced": 0,
         "skipped_suppressed": 0,
         "skipped_duplicate": 0,
@@ -396,7 +429,7 @@ async def run_pipeline(batch_date: Optional[date] = None) -> dict[str, Any]:
 
     # Run Apollo sourcing and Apify hiring fetch concurrently
     prospects, hiring_companies = await asyncio.gather(
-        source_leads(limit=150),
+        source_leads(config=config, limit=lead_limit),
         fetch_hiring_companies(),
     )
     stats["sourced"] = len(prospects)
@@ -451,7 +484,7 @@ async def run_pipeline(batch_date: Optional[date] = None) -> dict[str, Any]:
             stats["enriched"] += 1
 
         # --- Personalisation ---
-        p = await _generate_personalisation(lead, signals)
+        p = await _generate_personalisation(lead, signals, config=config)
         review_status = _determine_review_status(p)
 
         async with pool.acquire() as conn:

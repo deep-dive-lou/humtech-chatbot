@@ -12,7 +12,7 @@ from pydantic import BaseModel
 
 from app.db import get_pool
 from app.outreach import models
-from app.outreach.pipeline import run_pipeline
+from app.outreach.pipeline import load_campaign_config, run_pipeline
 from app.outreach.sender import push_to_instantly
 
 logger = logging.getLogger(__name__)
@@ -96,7 +96,9 @@ async def send_batch(batch_date: Optional[str] = None):
     if not leads:
         return {"ok": True, "sent": 0, "failed": 0, "message": "No sendable leads for this date"}
 
-    result = await push_to_instantly(leads)
+    config = load_campaign_config()
+    campaign_id = config.get("instantly_campaign_id")
+    result = await push_to_instantly(leads, campaign_id=campaign_id)
 
     async with pool.acquire() as conn:
         for lead in leads:
