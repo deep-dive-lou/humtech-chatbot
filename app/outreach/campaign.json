@@ -8,10 +8,11 @@
       "VP Sales", "Director of Sales"
     ],
     "person_seniorities": ["owner", "founder", "c_suite", "vp", "director"],
+    "person_locations": ["United Kingdom"],
     "organization_locations": ["United Kingdom"],
     "organization_num_employees_ranges": ["11,500"],
     "organization_industries": ["financial services"],
-    "organization_keywords": ["debt management", "debt consolidation", "debt advice", "debt solutions", "IVA", "debt recovery"],
+    "q_organization_keyword_tags": ["debt management", "debt consolidation", "debt advice", "debt solutions", "IVA", "debt recovery"],
     "organization_revenue_ranges": ["1000000,50000000"],
     "contact_email_status_v2": ["verified", "likely to engage"]
   },

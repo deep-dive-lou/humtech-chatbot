@@ -53,6 +53,20 @@ def _extract_json(text: str) -> str:
     return m.group(1).strip() if m else text.strip()
 
 
+async def _call_claude_with_retry(client: AsyncAnthropic, max_retries: int = 3, **kwargs) -> Any:
+    """Call Claude API with exponential backoff on 529 (overloaded) errors."""
+    for attempt in range(max_retries):
+        try:
+            return await client.messages.create(**kwargs)
+        except Exception as e:
+            if attempt < max_retries - 1 and ("529" in str(e) or "overloaded" in str(e).lower()):
+                wait = 2 ** attempt
+                logger.warning("Claude overloaded, retry %d/%d in %ds", attempt + 1, max_retries, wait)
+                await asyncio.sleep(wait)
+                continue
+            raise
+
+
 def load_campaign_config() -> dict[str, Any]:
     """Load active campaign config. Falls back to empty dict if missing/invalid."""
     try:
@@ -81,6 +95,7 @@ async def source_leads(config: dict[str, Any] | None = None, limit: int = 150) -
         "person_titles": ac.get("person_titles", APOLLO_TITLES),
         "person_seniorities": ac.get("person_seniorities", APOLLO_SENIORITIES),
         "contact_email_status_v2": ac.get("contact_email_status_v2", ["verified", "likely to engage"]),
+        "person_locations": ac.get("person_locations", ["United Kingdom"]),
         "organization_locations": ac.get("organization_locations", ["United Kingdom"]),
         "organization_num_employees_ranges": ac.get("organization_num_employees_ranges", ["50,500"]),
         "per_page": min(limit, 100),
@@ -88,7 +103,8 @@ async def source_leads(config: dict[str, Any] | None = None, limit: int = 150) -
     }
 
     # Optional filters — only add if present in config
-    for key in ("organization_industries", "organization_revenue_ranges"):
+    for key in ("organization_industries", "organization_revenue_ranges",
+                "q_organization_keyword_tags"):
         if key in ac:
             payload[key] = ac[key]
 
@@ -315,7 +331,8 @@ async def _analyse_website(domain: str) -> dict[str, Any]:
 
     client = AsyncAnthropic(api_key=settings.anthropic_api_key)
     try:
-        msg = await client.messages.create(
+        msg = await _call_claude_with_retry(
+            client,
             model=ENRICHMENT_MODEL,
             max_tokens=400,
             messages=[{
@@ -433,7 +450,8 @@ Truth rules — non-negotiable:
     }
 
     try:
-        msg = await client.messages.create(
+        msg = await _call_claude_with_retry(
+            client,
             model=PERSONALISATION_MODEL,
             max_tokens=500,
             messages=[{"role": "user", "content": prompt}],
@@ -493,6 +511,7 @@ async def run_pipeline(batch_date: Optional[date] = None) -> dict[str, Any]:
         return stats
 
     pool = await get_pool()
+    seen_domains: set[str] = set()
 
     for person in prospects:
         lead = _parse_apollo_person(person)
@@ -502,6 +521,14 @@ async def run_pipeline(batch_date: Optional[date] = None) -> dict[str, Any]:
             continue
 
         domain = lead.get("company_domain")
+
+        # One contact per company — skip if we already have someone at this domain
+        if domain:
+            if domain in seen_domains:
+                logger.info("Skipping %s — already have contact at %s", lead["email"], domain)
+                stats["skipped_duplicate"] += 1
+                continue
+            seen_domains.add(domain)
 
         async with pool.acquire() as conn:
             # Suppression check
@@ -568,6 +595,9 @@ async def run_pipeline(batch_date: Optional[date] = None) -> dict[str, Any]:
             )
 
         stats[review_status] += 1
+
+        # Pace API calls to avoid Claude rate limits
+        await asyncio.sleep(1)
 
     logger.info("Pipeline complete: %s", stats)
     return stats
