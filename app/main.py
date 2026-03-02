@@ -1,8 +1,17 @@
+import logging
+import sys
+
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 from typing import Optional
 from dotenv import load_dotenv
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    stream=sys.stdout,
+)
 from .config import settings
 from .db import init_db_pool, close_db_pool, get_pool
 from .bot.jobs import claim_jobs, mark_done, mark_retry

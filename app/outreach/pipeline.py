@@ -511,7 +511,7 @@ async def run_pipeline(batch_date: Optional[date] = None) -> dict[str, Any]:
         return stats
 
     pool = await get_pool()
-    seen_domains: set[str] = set()
+    seen_companies: set[str] = set()
 
     for person in prospects:
         lead = _parse_apollo_person(person)
@@ -521,14 +521,15 @@ async def run_pipeline(batch_date: Optional[date] = None) -> dict[str, Any]:
             continue
 
         domain = lead.get("company_domain")
+        company_key = domain or _normalise_company(lead.get("company", ""))
 
-        # One contact per company — skip if we already have someone at this domain
-        if domain:
-            if domain in seen_domains:
-                logger.info("Skipping %s — already have contact at %s", lead["email"], domain)
+        # One contact per company — skip if we already have someone there
+        if company_key:
+            if company_key in seen_companies:
+                logger.info("Skipping %s — already have contact at %s", lead["email"], company_key)
                 stats["skipped_duplicate"] += 1
                 continue
-            seen_domains.add(domain)
+            seen_companies.add(company_key)
 
         async with pool.acquire() as conn:
             # Suppression check
