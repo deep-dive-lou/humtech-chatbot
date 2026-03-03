@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import date
+from datetime import date, timedelta
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Request
@@ -36,18 +36,17 @@ async def review_page(request: Request, batch_date: Optional[str] = None):
         leads = await models.get_batch(conn, today)
         counts = await models.get_batch_counts(conn, today)
 
-    needs_review = [l for l in leads if l["review_status"] == "needs_review"]
-    auto_send = [l for l in leads if l["review_status"] == "auto_send"]
-    blocked = [l for l in leads if l["review_status"] == "blocked"]
+    all_leads = [l for l in leads if l["review_status"] in ("needs_review", "auto_send")]
 
     return templates.TemplateResponse("review.html", {
         "request": request,
         "batch_date": today.strftime("%d %b %Y").lstrip("0"),
         "batch_date_iso": today.isoformat(),
+        "prev_date": (today - timedelta(days=1)).isoformat(),
+        "next_date": (today + timedelta(days=1)).isoformat(),
+        "today_iso": date.today().isoformat(),
         "counts": counts,
-        "needs_review": needs_review,
-        "auto_send": auto_send,
-        "blocked": blocked,
+        "leads": all_leads,
     })
 
 
