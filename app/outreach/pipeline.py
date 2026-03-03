@@ -46,6 +46,23 @@ CAMPAIGN_CONFIG_PATH = Path(__file__).parent / "campaign.json"
 
 _JSON_FENCE_RE = re.compile(r"```(?:json)?\s*\n?(.*?)\n?\s*```", re.DOTALL)
 
+_UNICODE_REPLACEMENTS = {
+    "\u2014": "-",   # em dash
+    "\u2013": "-",   # en dash
+    "\u2018": "'",   # left single quote
+    "\u2019": "'",   # right single quote
+    "\u201c": '"',   # left double quote
+    "\u201d": '"',   # right double quote
+    "\u2026": "...", # ellipsis
+}
+
+
+def _sanitize_text(text: str) -> str:
+    """Replace Unicode punctuation with ASCII equivalents for clean email rendering."""
+    for char, replacement in _UNICODE_REPLACEMENTS.items():
+        text = text.replace(char, replacement)
+    return text
+
 
 def _extract_json(text: str) -> str:
     """Strip markdown code fences from LLM output before JSON parsing."""
@@ -646,7 +663,7 @@ async def run_pipeline(batch_date: Optional[date] = None) -> dict[str, Any]:
             await insert_personalisation(
                 conn,
                 lead_id=lead_id,
-                opener_first_line=p.get("opener_first_line", ""),
+                opener_first_line=_sanitize_text(p.get("opener_first_line", "")),
                 micro_insight=p.get("micro_insight"),
                 angle_tag=p.get("angle_tag"),
                 confidence_score=float(p.get("confidence_score", 0.0)),
