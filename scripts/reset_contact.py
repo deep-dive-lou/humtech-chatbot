@@ -7,20 +7,29 @@ PHONE = "+447915262257"
 async def main():
     conn = await asyncpg.connect(DB)
 
-    # Clear context (removes lead_touchpoint so new_lead re-sends)
-    # and reopen conversation if closed
-    result = await conn.execute("""
-        UPDATE bot.conversations
-        SET context = '{}'::jsonb,
-            status = 'open',
-            updated_at = now()
-        WHERE contact_id = (
-            SELECT contact_id FROM bot.contacts
-            WHERE channel_address = $1
-            LIMIT 1
-        )
+    contact_id = await conn.fetchval("""
+        SELECT contact_id FROM bot.contacts
+        WHERE channel_address = $1
+        LIMIT 1
     """, PHONE)
-    print(f"Reset conversation: {result}")
+    print(f"Contact: {contact_id}")
+
+    # Delete messages first (FK dependency)
+    deleted_msgs = await conn.execute("""
+        DELETE FROM bot.messages
+        WHERE conversation_id IN (
+            SELECT conversation_id FROM bot.conversations
+            WHERE contact_id = $1
+        )
+    """, contact_id)
+    print(f"Deleted messages: {deleted_msgs}")
+
+    # Delete all conversations — new_lead will create a fresh one
+    deleted_convos = await conn.execute("""
+        DELETE FROM bot.conversations
+        WHERE contact_id = $1
+    """, contact_id)
+    print(f"Deleted conversations: {deleted_convos}")
 
     await conn.close()
 
