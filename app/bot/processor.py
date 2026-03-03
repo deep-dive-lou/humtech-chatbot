@@ -1158,7 +1158,7 @@ async def process_job(conn: asyncpg.Connection, job_id: str) -> dict[str, Any]:
                 )
                 if cancel_result.get("success"):
                     context_updates["booked_booking"] = None
-                    slot_text, new_last_offer = await _handle_offer_slots(conn, ev.tenant_id, _NullRouteInfo())
+                    slot_text, new_last_offer = await _handle_offer_slots(conn, ev.tenant_id, route_info)
                     context_updates["last_offer"] = new_last_offer
                     _cancel_preamble = llm_preamble or "No problem, I've cancelled your booking!"
                     out_text = f"{_cancel_preamble} {slot_text}"
@@ -1168,7 +1168,7 @@ async def process_job(conn: asyncpg.Connection, job_id: str) -> dict[str, Any]:
                     route = "reschedule_failed"
             else:
                 # No existing booking — just offer slots
-                slot_text, new_last_offer = await _handle_offer_slots(conn, ev.tenant_id, _NullRouteInfo())
+                slot_text, new_last_offer = await _handle_offer_slots(conn, ev.tenant_id, route_info)
                 context_updates["last_offer"] = new_last_offer
                 _reschedule_preamble = llm_preamble or ""
                 out_text = f"{_reschedule_preamble} {slot_text}".strip()
