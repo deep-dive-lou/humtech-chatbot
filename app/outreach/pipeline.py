@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import random
 import re
 from datetime import date
 from pathlib import Path
@@ -100,11 +101,20 @@ def load_campaign_config() -> dict[str, Any]:
 # Lead sourcing — Apollo (two-step: org search → people search)
 # ---------------------------------------------------------------------------
 
-async def _search_target_orgs(config: dict[str, Any] | None = None) -> list[str]:
+async def _search_target_orgs(
+    config: dict[str, Any] | None = None,
+    target_orgs: int = 200,
+) -> list[str]:
     """Step 1: Find target org domains via Apollo Organization Search.
 
     Uses q_organization_keyword_tags, organization_locations etc. which
     are only supported on the org search endpoint, not api_search.
+
+    Picks a random starting page each run so successive runs hit different
+    slices of the result set. Wraps around to page 1 if it reaches the end.
+    Stops once target_orgs domains are collected or the full result set is
+    exhausted.
+
     Returns list of primary_domain strings.
     """
     if not settings.apollo_api_key:
@@ -112,30 +122,51 @@ async def _search_target_orgs(config: dict[str, Any] | None = None) -> list[str]
 
     os_config = (config or {}).get("apollo", {}).get("organization_search", {})
     if not os_config:
-        logger.warning("No apollo.organization_search config — skipping org search")
+        logger.warning("No apollo.organization_search config -- skipping org search")
         return []
 
     logger.info("Apollo org search filters: %s", {k: v for k, v in os_config.items()})
 
-    domains: list[str] = []
+    api_url = "https://api.apollo.io/api/v1/mixed_companies/search"
+    headers = {"Content-Type": "application/json", "X-Api-Key": settings.apollo_api_key}
     nonprofit_tlds = (".org", ".org.uk", ".charity", ".ngo")
-    page = 1
-    max_pages = 5  # up to 500 orgs
+
+    # Probe page 1 to discover total_pages
+    async with httpx.AsyncClient(timeout=30) as client:
+        probe = await client.post(
+            api_url,
+            json={**os_config, "per_page": 100, "page": 1},
+            headers=headers,
+        )
+        probe.raise_for_status()
+        probe_data = probe.json()
+        total_pages = probe_data.get("pagination", {}).get("total_pages", 1)
+        total_entries = probe_data.get("pagination", {}).get("total_entries", 0)
+
+    logger.info(
+        "Apollo org search: %d total orgs across %d pages", total_entries, total_pages
+    )
+
+    if total_pages == 0:
+        return []
+
+    # Pick a random start page so each run samples different orgs
+    start_page = random.randint(1, total_pages)
+    logger.info("Apollo org search: starting at random page %d of %d", start_page, total_pages)
+
+    domains: list[str] = []
+    pages_fetched = 0
 
     async with httpx.AsyncClient(timeout=30) as client:
-        while page <= max_pages:
+        page = start_page
+        while len(domains) < target_orgs and pages_fetched < total_pages:
             payload = {**os_config, "per_page": 100, "page": page}
             try:
-                resp = await client.post(
-                    "https://api.apollo.io/api/v1/mixed_companies/search",
-                    json=payload,
-                    headers={"Content-Type": "application/json", "X-Api-Key": settings.apollo_api_key},
-                )
+                resp = await client.post(api_url, json=payload, headers=headers)
                 resp.raise_for_status()
                 data = resp.json()
                 orgs = data.get("organizations", []) or data.get("accounts", [])
                 if not orgs:
-                    logger.info("Apollo org search: no more results at page %d", page)
                     break
                 logger.info("Apollo org search: page %d returned %d orgs", page, len(orgs))
                 for org in orgs:
@@ -147,14 +178,19 @@ async def _search_target_orgs(config: dict[str, Any] | None = None) -> list[str]
                         logger.info("  Skipped non-profit: %s (%s)", name, domain)
                         continue
                     domains.append(domain)
-                if len(orgs) < 100:
-                    break  # last page
-                page += 1
+                pages_fetched += 1
+                # Advance page, wrap around to 1 if we hit the end
+                page = page + 1 if page < total_pages else 1
+                if page == start_page:
+                    break  # wrapped all the way around
             except Exception as e:
                 logger.error("Apollo org search failed on page %d: %s", page, e)
                 break
 
-    logger.info("Apollo org search: found %d target orgs with domains (across %d pages)", len(domains), page)
+    logger.info(
+        "Apollo org search: collected %d org domains (fetched %d pages, started at page %d)",
+        len(domains), pages_fetched, start_page,
+    )
     return domains
 
 
