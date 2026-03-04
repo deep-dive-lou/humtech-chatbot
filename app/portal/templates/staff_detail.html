@@ -8,11 +8,14 @@
 </head>
 <body class="bg-gray-50 text-gray-900 min-h-screen">
 
-  <!-- Header -->
-  <div class="bg-white border-b border-gray-200 sticky top-0 z-10">
+  {% from "_nav.html" import staff_nav %}
+  {{ staff_nav(staff, active='requests') }}
+
+  <!-- Sub-header with request info -->
+  <div class="bg-white border-b border-gray-200">
     <div class="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
       <div class="flex items-center gap-3">
-        <a href="/portal/staff/requests" class="text-sm text-gray-400 hover:text-gray-900">← Requests</a>
+        <a href="/portal/staff/requests" class="text-sm text-gray-400 hover:text-gray-900">&larr; Requests</a>
         <span class="text-gray-200">|</span>
         <h1 class="text-lg font-semibold">{{ req.client_name }}</h1>
         {% set s = req.status %}
@@ -26,11 +29,14 @@
           <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-700">In progress</span>
         {% elif s == "completed" %}
           <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">Completed</span>
+        {% elif s == "cancelled" %}
+          <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-500">Cancelled</span>
         {% else %}
           <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">{{ s }}</span>
         {% endif %}
       </div>
-      <div class="flex items-center gap-4">
+      <div class="flex items-center gap-3">
+        {% if req.status not in ['completed', 'cancelled'] %}
         <button
           id="copyLinkBtn"
           onclick="generateLink()"
@@ -38,7 +44,34 @@
         >
           Copy link
         </button>
-        <a href="/portal/staff/logout" class="text-sm text-gray-500 hover:text-gray-900">Sign out</a>
+        <button
+          onclick="closeRequest('complete')"
+          class="text-xs font-medium px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+        >
+          Complete
+        </button>
+        <button
+          onclick="closeRequest('cancel')"
+          class="text-xs font-medium px-3 py-1.5 border border-gray-300 text-gray-500 rounded-lg hover:bg-gray-50 transition-colors"
+        >
+          Cancel
+        </button>
+        {% elif req.status in ['completed', 'cancelled'] and staff.role == 'admin' %}
+        <button
+          onclick="reopenRequest()"
+          class="text-xs font-medium px-3 py-1.5 border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors"
+        >
+          Reopen
+        </button>
+        {% endif %}
+        {% if req.status in ['draft', 'cancelled'] and staff.role == 'admin' %}
+        <button
+          onclick="deleteRequest()"
+          class="text-xs text-red-400 hover:text-red-600 px-2 py-1.5"
+        >
+          Delete
+        </button>
+        {% endif %}
       </div>
     </div>
   </div>
@@ -50,7 +83,19 @@
       <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
       </svg>
-      This request is a draft — the client has not been sent a link yet. Use <strong class="font-semibold">Copy link</strong> to get a shareable link for the client.
+      This request is a draft — the client has not been sent a link yet. Use <strong class="font-semibold">Copy link</strong> to get a shareable link.
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Ready to close banner -->
+  {% if all_approved and req.status not in ['completed', 'cancelled'] %}
+  <div class="bg-green-50 border-b border-green-100">
+    <div class="max-w-5xl mx-auto px-6 py-2.5 flex items-center gap-2 text-sm text-green-700">
+      <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+      </svg>
+      All items approved — this request is ready to be marked complete.
     </div>
   </div>
   {% endif %}
@@ -110,10 +155,12 @@
             <div class="flex-1">
               <div class="flex items-center gap-2">
                 <p class="font-medium text-sm">{{ item.title }}</p>
+                {% if item.item_type == 'signature' %}
+                  <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700">Sign</span>
+                {% endif %}
                 {% if item.required %}
                   <span class="text-xs text-gray-400">required</span>
                 {% endif %}
-                <!-- status badge -->
                 <span id="status-{{ item.id }}"
                   class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium
                   {% if item.status == 'approved' %}bg-green-100 text-green-700
@@ -127,7 +174,29 @@
               <p class="text-xs text-gray-400 mt-1">{{ item.instructions }}</p>
               {% endif %}
 
-              <!-- Uploaded files for this item -->
+              {% if item.item_type == 'signature' %}
+              <div class="mt-2 space-y-1">
+                {% if signed_pdf_urls.get(item.id | string) %}
+                <a href="{{ signed_pdf_urls[item.id | string] }}" target="_blank" class="inline-flex items-center gap-1 text-xs text-green-600 font-medium hover:underline">
+                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                  View signed document
+                </a>
+                {% endif %}
+                {% if signature_doc_urls.get(item.id | string) %}
+                <a href="{{ signature_doc_urls[item.id | string] }}" target="_blank" class="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline">
+                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                  View original document
+                </a>
+                {% endif %}
+                {% if not signed_pdf_urls.get(item.id | string) and signature_img_urls.get(item.id | string) %}
+                <div>
+                  <p class="text-xs text-gray-400 mb-1">Client signature:</p>
+                  <img src="{{ signature_img_urls[item.id | string] }}" alt="Signature" class="h-16 border border-gray-200 rounded bg-white p-1" />
+                </div>
+                {% endif %}
+              </div>
+              {% endif %}
+
               {% set item_files = files_by_item.get(item.id | string, []) %}
               {% if item_files %}
               <div class="mt-2 space-y-1">
@@ -140,7 +209,7 @@
                     {{ f.original_filename }}
                   </a>
                   {% if f.size_bytes %}
-                  <span class="text-gray-300">·</span>
+                  <span class="text-gray-300">&middot;</span>
                   <span>{{ (f.size_bytes / 1024) | round(1) }} KB</span>
                   {% endif %}
                 </div>
@@ -149,31 +218,32 @@
               {% endif %}
             </div>
 
-            <!-- Review actions -->
-            {% if item.status in ['uploaded', 'needs_review'] %}
-            <div class="flex items-center gap-2 flex-shrink-0">
-              <button
-                onclick="reviewItem('{{ item.id }}', 'approve')"
-                class="text-xs font-medium px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-              >
-                Approve
-              </button>
-              <button
-                onclick="reviewItem('{{ item.id }}', 'reject')"
-                class="text-xs font-medium px-3 py-1.5 border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors"
-              >
-                Reject
-              </button>
-            </div>
-            {% elif item.status == 'approved' %}
-            <div class="flex-shrink-0">
-              <button
-                onclick="reviewItem('{{ item.id }}', 'reject')"
-                class="text-xs text-gray-400 hover:text-gray-600 transition-colors"
-              >
-                Undo
-              </button>
-            </div>
+            {% if req.status not in ['completed', 'cancelled'] %}
+              {% if item.status in ['uploaded', 'needs_review'] %}
+              <div class="flex items-center gap-2 flex-shrink-0">
+                <button
+                  onclick="reviewItem('{{ item.id }}', 'approve')"
+                  class="text-xs font-medium px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                >
+                  Approve
+                </button>
+                <button
+                  onclick="reviewItem('{{ item.id }}', 'reject')"
+                  class="text-xs font-medium px-3 py-1.5 border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Reject
+                </button>
+              </div>
+              {% elif item.status == 'approved' %}
+              <div class="flex-shrink-0">
+                <button
+                  onclick="reviewItem('{{ item.id }}', 'reject')"
+                  class="text-xs text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  Undo
+                </button>
+              </div>
+              {% endif %}
             {% endif %}
           </div>
         </div>
@@ -189,7 +259,7 @@
 
     async function generateLink() {
       const btn = document.getElementById('copyLinkBtn');
-      btn.textContent = 'Generating…';
+      btn.textContent = 'Generating...';
       btn.disabled = true;
       try {
         const res = await fetch(`/portal/staff/requests/${requestId}/link`, {
@@ -216,6 +286,45 @@
       document.getElementById('linkModal').classList.add('hidden');
     }
 
+    async function closeRequest(action) {
+      const label = action === 'complete' ? 'mark this request as complete' : 'cancel this request';
+      if (!confirm(`Are you sure you want to ${label}?`)) return;
+
+      const res = await fetch(`/portal/staff/requests/${requestId}/close`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        alert(data.error || 'Action failed');
+        return;
+      }
+      window.location.reload();
+    }
+
+    async function reopenRequest() {
+      if (!confirm('Reopen this request?')) return;
+
+      const res = await fetch(`/portal/staff/requests/${requestId}/reopen`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        alert(data.error || 'Action failed');
+        return;
+      }
+      window.location.reload();
+    }
+
+    async function deleteRequest() {
+      if (!confirm('Permanently delete this request? This cannot be undone.')) return;
+      const res = await fetch(`/portal/staff/requests/${requestId}`, { method: 'DELETE' });
+      if (res.ok) { window.location.href = '/portal/staff/requests'; }
+      else { const d = await res.json(); alert(d.error || 'Delete failed'); }
+    }
+
     async function reviewItem(itemId, action) {
       const res = await fetch(`/portal/staff/items/${itemId}/review`, {
         method: 'POST',
@@ -224,19 +333,6 @@
       });
       const data = await res.json();
       if (!res.ok) { alert(data.error || 'Action failed'); return; }
-
-      // Update status badge in place
-      const badge = document.getElementById(`status-${itemId}`);
-      const s = data.status;
-      badge.textContent = s;
-      badge.className = 'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ' + (
-        s === 'approved' ? 'bg-green-100 text-green-700' :
-        s === 'uploaded' ? 'bg-blue-100 text-blue-700' :
-        s === 'missing'  ? 'bg-red-50 text-red-500' :
-        'bg-gray-100 text-gray-500'
-      );
-
-      // Reload the row's action buttons by refreshing the page
       window.location.reload();
     }
   </script>

@@ -70,6 +70,19 @@ def presign_get(key: str, expires_seconds: int = 300) -> str:
     )
 
 
+def download_object(key: str) -> bytes:
+    """Download an object from Spaces and return its content as bytes."""
+    s3 = _get_s3()
+    resp = s3.get_object(Bucket=SPACES_BUCKET, Key=key)
+    return resp["Body"].read()
+
+
+def upload_object(key: str, data: bytes, content_type: str) -> None:
+    """Upload bytes directly to Spaces."""
+    s3 = _get_s3()
+    s3.put_object(Bucket=SPACES_BUCKET, Key=key, Body=data, ContentType=content_type)
+
+
 def head_object(key: str) -> dict | None:
     """HEAD object in Spaces. Returns {"size_bytes": int, "content_type": str} or None if missing."""
     s3 = _get_s3()

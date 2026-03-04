@@ -10,3 +10,6 @@ boto3
 bcrypt
 python-jose[cryptography]
 python-multipart
+pypdf
+reportlab
+Pillow

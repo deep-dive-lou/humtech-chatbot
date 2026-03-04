@@ -5,12 +5,12 @@ from datetime import datetime, timedelta, timezone
 
 import asyncpg
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from ..config import settings
 from .auth import get_conn, get_tenant_brand, log_audit
-from .storage import SPACES_BUCKET, head_object, presign_put
+from .storage import SPACES_BUCKET, head_object, presign_get, presign_put
 
 router = APIRouter(prefix="/portal", tags=["portal"])
 
@@ -119,59 +119,9 @@ async def create_access_link(
 
 
 @router.get("/r/{token}")
-async def resolve_magic_link(token: str, conn: asyncpg.Connection = Depends(get_conn)):
-    token_hash = _hash_token(token)
-
-    async with conn.transaction():
-        tok = await conn.fetchrow(_resolve_token_sql(), token_hash)
-
-        if not tok:
-            raise HTTPException(status_code=404, detail="Invalid link")
-        if tok["revoked_at"] is not None:
-            raise HTTPException(status_code=403, detail="Link revoked")
-        if tok["expires_at"] is not None and tok["expires_at"] < _now_utc():
-            raise HTTPException(status_code=403, detail="Link expired")
-
-        await conn.execute("""
-            UPDATE portal.request_access_tokens
-            SET last_used_at = now(), use_count = use_count + 1
-            WHERE token_hash = $1
-        """, token_hash)
-
-        await conn.execute("""
-            UPDATE portal.doc_requests
-            SET last_viewed_at = now(),
-                status = CASE
-                    WHEN status IN ('sent') THEN 'viewed'::public.request_status
-                    ELSE status
-                END
-            WHERE id = $1
-        """, tok["request_id"])
-
-        await log_audit(
-            conn,
-            tenant_id=tok["tenant_id"],
-            event_type="magic_link_resolved",
-            actor="client",
-            request_id=str(tok["request_id"]),
-        )
-
-        req = await conn.fetchrow("""
-            SELECT r.id, r.status::text AS status, r.due_at,
-                   c.full_name AS client_name, c.email AS client_email
-            FROM portal.doc_requests r
-            JOIN portal.clients c ON c.id = r.client_id
-            WHERE r.id = $1
-        """, tok["request_id"])
-
-        items = await conn.fetch("""
-            SELECT id, title, item_type::text AS item_type, required, status::text AS status, sort_order, instructions
-            FROM portal.doc_request_items
-            WHERE request_id = $1
-            ORDER BY sort_order ASC
-        """, tok["request_id"])
-
-    return {"request": dict(req), "items": [dict(i) for i in items]}
+async def resolve_magic_link(token: str):
+    """Redirect bare token URL to the HTML view."""
+    return RedirectResponse(url=f"/portal/r/{token}/view", status_code=302)
 
 
 # ---------------------------------------------------------------------------
@@ -239,7 +189,8 @@ async def client_portal_view(
 
         items = await conn.fetch("""
             SELECT id, title, item_type::text AS item_type, required,
-                   status::text AS status, sort_order, instructions
+                   status::text AS status, sort_order, instructions, file_key,
+                   sig_page, sig_x, sig_y, sig_w, sig_h
             FROM portal.doc_request_items
             WHERE request_id = $1
             ORDER BY sort_order ASC
@@ -381,3 +332,183 @@ async def confirm_upload(
         "scan_status": "clean",
         "item_status": "uploaded",
     }
+
+
+# ---------------------------------------------------------------------------
+# Signature flow (document to sign)
+# ---------------------------------------------------------------------------
+
+@router.get("/r/{token}/signature/{item_id}/pdf-bytes")
+async def client_signature_pdf_bytes(
+    token: str,
+    item_id: str,
+    conn: asyncpg.Connection = Depends(get_conn),
+):
+    """Stream the PDF through for client-side PDF.js rendering."""
+    token_hash = _hash_token(token)
+    tok = await conn.fetchrow("""
+        SELECT request_id, tenant_id FROM portal.request_access_tokens
+        WHERE token_hash=$1 AND revoked_at IS NULL
+          AND (expires_at IS NULL OR expires_at > now())
+        LIMIT 1
+    """, token_hash)
+    if not tok:
+        raise HTTPException(status_code=404, detail="Invalid or expired link")
+
+    item = await conn.fetchrow(
+        "SELECT file_key FROM portal.doc_request_items WHERE id = $1::uuid AND request_id = $2",
+        item_id, tok["request_id"],
+    )
+    if not item or not item["file_key"]:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    from .storage import download_object
+    from fastapi.responses import Response
+    pdf_data = download_object(item["file_key"])
+    return Response(content=pdf_data, media_type="application/pdf")
+
+
+@router.get("/r/{token}/signature/{item_id}/document")
+async def signature_document(
+    token: str,
+    item_id: str,
+    conn: asyncpg.Connection = Depends(get_conn),
+):
+    """Redirect to presigned GET URL for the document the client needs to sign."""
+    token_hash = _hash_token(token)
+    tok = await conn.fetchrow("""
+        SELECT request_id, tenant_id FROM portal.request_access_tokens
+        WHERE token_hash=$1 AND revoked_at IS NULL
+          AND (expires_at IS NULL OR expires_at > now())
+        LIMIT 1
+    """, token_hash)
+    if not tok:
+        raise HTTPException(status_code=404, detail="Invalid or expired link")
+
+    item = await conn.fetchrow(
+        "SELECT file_key FROM portal.doc_request_items WHERE id = $1::uuid AND request_id = $2",
+        item_id, tok["request_id"],
+    )
+    if not item or not item["file_key"]:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    url = presign_get(item["file_key"])
+    return RedirectResponse(url=url, status_code=302)
+
+
+@router.post("/r/{token}/items/{item_id}/upload-sig")
+async def signature_upload(
+    token: str,
+    item_id: str,
+    body: dict = Body(...),
+    conn: asyncpg.Connection = Depends(get_conn),
+):
+    """Upload signature PNG through the server (avoids CORS with Spaces)."""
+    token_hash = _hash_token(token)
+    tok = await conn.fetchrow("""
+        SELECT request_id, tenant_id FROM portal.request_access_tokens
+        WHERE token_hash=$1 AND revoked_at IS NULL
+          AND (expires_at IS NULL OR expires_at > now())
+        LIMIT 1
+    """, token_hash)
+    if not tok:
+        raise HTTPException(status_code=404, detail="Invalid or expired link")
+
+    item = await conn.fetchrow(
+        "SELECT id, tenant_id FROM portal.doc_request_items WHERE id = $1::uuid AND request_id = $2",
+        item_id, tok["request_id"],
+    )
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+
+    import base64
+    data_url = body.get("image", "")
+    if "," in data_url:
+        data_url = data_url.split(",", 1)[1]
+    png_bytes = base64.b64decode(data_url)
+
+    object_key = f"{item['tenant_id']}/{tok['request_id']}/{item_id}/signature.png"
+    from .storage import upload_object
+    upload_object(object_key, png_bytes, "image/png")
+    return {"file_key": object_key}
+
+
+@router.post("/r/{token}/items/{item_id}/acknowledge")
+async def acknowledge_signature(
+    token: str,
+    item_id: str,
+    body: dict = Body(default={}),
+    conn: asyncpg.Connection = Depends(get_conn),
+):
+    """Confirm client has signed — save signature_file_key and set status to uploaded."""
+    token_hash = _hash_token(token)
+
+    async with conn.transaction():
+        tok = await conn.fetchrow("""
+            SELECT request_id, tenant_id FROM portal.request_access_tokens
+            WHERE token_hash=$1 AND revoked_at IS NULL
+              AND (expires_at IS NULL OR expires_at > now())
+            LIMIT 1
+        """, token_hash)
+        if not tok:
+            raise HTTPException(status_code=404, detail="Invalid or expired link")
+
+        item = await conn.fetchrow(
+            """SELECT id, item_type::text AS item_type, status::text AS status,
+                      file_key, sig_page, sig_x, sig_y, sig_w, sig_h
+               FROM portal.doc_request_items
+               WHERE id = $1::uuid AND request_id = $2""",
+            item_id, tok["request_id"],
+        )
+        if not item or item["item_type"] != "signature":
+            raise HTTPException(status_code=400, detail="Not a signature item")
+        if item["status"] not in ("missing", "pending"):
+            return {"item_id": item_id, "status": item["status"]}
+
+        signature_file_key = (body.get("signature_file_key") or "").strip() or None
+
+        # Server-side PDF merge if position data exists
+        signed_pdf_key = None
+        if signature_file_key and item["file_key"] and item["sig_page"] is not None:
+            try:
+                import asyncio
+                from .storage import download_object, upload_object
+                from .pdf_merge import merge_signature_onto_pdf
+
+                pdf_bytes = download_object(item["file_key"])
+                sig_bytes = download_object(signature_file_key)
+
+                merged = await asyncio.to_thread(
+                    merge_signature_onto_pdf,
+                    pdf_bytes, sig_bytes,
+                    item["sig_page"],
+                    item["sig_x"], item["sig_y"],
+                    item["sig_w"], item["sig_h"],
+                )
+
+                signed_pdf_key = f"{tok['tenant_id']}/{tok['request_id']}/{item_id}/signed.pdf"
+                upload_object(signed_pdf_key, merged, "application/pdf")
+            except Exception:
+                pass  # Merge failed — still save signature, just no merged PDF
+
+        await conn.execute(
+            """UPDATE portal.doc_request_items
+               SET status = 'uploaded'::public.request_item_status,
+                   signature_file_key = $1,
+                   signed_pdf_key = $2
+               WHERE id = $3::uuid AND tenant_id = $4""",
+            signature_file_key,
+            signed_pdf_key,
+            item_id,
+            tok["tenant_id"],
+        )
+
+        await log_audit(
+            conn,
+            tenant_id=tok["tenant_id"],
+            event_type="signature_acknowledged",
+            actor="client",
+            request_id=str(tok["request_id"]),
+        )
+
+    return {"item_id": item_id, "status": "uploaded"}

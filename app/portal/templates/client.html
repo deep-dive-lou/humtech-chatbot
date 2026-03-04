@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% if req %}Document Request{% else %}HumTech Portal{% endif %}</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/signature_pad@5/dist/signature_pad.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
 </head>
 <body class="bg-gray-50 text-gray-900 min-h-screen">
 
@@ -26,7 +28,7 @@
     {% if error %}
     <!-- Error state -->
     <div class="bg-white rounded-xl border border-gray-200 p-8 text-center">
-      <div class="text-3xl mb-3">🔗</div>
+      <div class="text-3xl mb-3">&#128279;</div>
       <p class="font-medium text-gray-900">Link unavailable</p>
       <p class="text-sm text-gray-500 mt-2">{{ error }}</p>
     </div>
@@ -56,7 +58,7 @@
       <div class="flex items-center justify-between text-sm mb-2">
         <span class="text-gray-500">{{ done }} of {{ total }} items submitted</span>
         {% if approved == total and total > 0 %}
-        <span class="text-green-600 font-medium">All approved ✓</span>
+        <span class="text-green-600 font-medium">All approved</span>
         {% elif done == total and total > 0 %}
         <span class="text-blue-600 font-medium">All submitted — awaiting review</span>
         {% endif %}
@@ -112,28 +114,126 @@
               <p class="text-xs text-gray-400 mt-1">{{ item.instructions }}</p>
               {% endif %}
 
-              <!-- Upload area — only for missing items -->
-              {% if item.status == 'missing' %}
-              <div class="mt-3" id="upload-{{ item.id }}">
-                <label
-                  for="file-{{ item.id }}"
-                  class="inline-flex items-center gap-2 text-xs font-medium px-3 py-2 rounded-lg cursor-pointer transition-colors text-white"
-                  style="background-color: {{ brand_color }}; opacity: 0.9;"
-                  onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.9'"
-                >
-                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
-                  </svg>
-                  <span id="label-{{ item.id }}">Choose file</span>
-                </label>
-                <input
-                  type="file"
-                  id="file-{{ item.id }}"
-                  class="hidden"
-                  onchange="handleFileSelect(event, '{{ item.id }}')"
-                />
-                <p id="progress-{{ item.id }}" class="text-xs text-gray-400 mt-1 hidden"></p>
-              </div>
+              <!-- Upload / signature area — for pending and missing items -->
+              {% if item.status in ['missing', 'pending'] %}
+                {% if item.item_type == 'signature' and item.sig_page is not none %}
+                <!-- In-document signature (PDF.js + overlay) -->
+                <div class="mt-3" id="upload-{{ item.id }}">
+                  <!-- Collapsed: click to open -->
+                  <button type="button" id="open-doc-btn-{{ item.id }}" onclick="toggleDocForSigning('{{ item.id }}')"
+                          class="inline-flex items-center gap-2 text-xs font-medium px-3 py-2 rounded-lg cursor-pointer transition-colors text-white"
+                          style="background-color: {{ brand_color }}; opacity: 0.9;"
+                          onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.9'">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                    </svg>
+                    <span id="open-doc-label-{{ item.id }}">Open document to sign</span>
+                  </button>
+
+                  <!-- Expanded: single page view + nav arrows + signature overlay -->
+                  <div id="pdf-wrapper-{{ item.id }}" style="display: none;">
+                    <div class="relative border border-gray-200 rounded-lg bg-gray-100" id="pdf-container-{{ item.id }}" style="min-height: 200px; overflow: visible;">
+                      <p id="pdf-loading-{{ item.id }}" class="text-xs text-gray-400 p-4">Loading document...</p>
+                      <!-- Page nav bar -->
+                      <div id="pdf-nav-{{ item.id }}" style="display: none;"
+                           class="flex items-center justify-between bg-white border-b border-gray-200 px-3 py-1.5">
+                        <button type="button" onclick="pdfPrevPage('{{ item.id }}')"
+                                id="pdf-prev-{{ item.id }}"
+                                class="text-gray-400 hover:text-gray-700 disabled:opacity-30 disabled:cursor-not-allowed p-1">
+                          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+                          </svg>
+                        </button>
+                        <span id="pdf-pageinfo-{{ item.id }}" class="text-xs text-gray-500">Page 1 of 1</span>
+                        <button type="button" onclick="pdfNextPage('{{ item.id }}')"
+                                id="pdf-next-{{ item.id }}"
+                                class="text-gray-400 hover:text-gray-700 disabled:opacity-30 disabled:cursor-not-allowed p-1">
+                          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                          </svg>
+                        </button>
+                      </div>
+                      <!-- Single page canvas -->
+                      <canvas id="pdf-canvas-{{ item.id }}" class="block" style="max-width: 100%;"></canvas>
+                      <!-- Signature overlay (only visible on sig page) -->
+                      <canvas id="sig-overlay-{{ item.id }}"
+                              class="absolute border-2 border-dashed border-purple-400 bg-purple-50 bg-opacity-30 rounded-sm cursor-crosshair"
+                              style="touch-action: none; display: none;"></canvas>
+                    </div>
+                    <!-- Sign hint (only on sig page) -->
+                    <p id="sig-hint-{{ item.id }}" class="text-xs text-gray-500 mt-2" style="display: none;">Sign in the highlighted area above</p>
+                    <div class="flex items-center gap-3 mt-2" id="sig-controls-{{ item.id }}" style="display: none;">
+                      <button type="button" onclick="clearOverlaySig('{{ item.id }}')"
+                              class="text-xs text-gray-400 hover:text-gray-700">Clear</button>
+                      <button type="button" id="sign-btn-{{ item.id }}" onclick="submitOverlaySig('{{ item.id }}')"
+                              class="text-xs font-medium px-3 py-1.5 rounded-lg text-white transition-colors"
+                              style="background-color: {{ brand_color }}; opacity: 0.9;"
+                              onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.9'">
+                        Sign &amp; submit
+                      </button>
+                    </div>
+                    <p id="sig-status-{{ item.id }}" class="text-xs text-gray-400 mt-1 hidden"></p>
+                  </div>
+                </div>
+
+                {% elif item.item_type == 'signature' %}
+                <!-- Legacy signature (separate canvas) -->
+                <div class="mt-3" id="upload-{{ item.id }}">
+                  {% if item.file_key %}
+                  <a href="/portal/r/{{ token }}/signature/{{ item.id }}/document" target="_blank"
+                     class="inline-flex items-center gap-1.5 text-xs font-medium text-blue-600 hover:underline mb-3">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                    </svg>
+                    View document to sign
+                  </a>
+                  {% endif %}
+                  <div>
+                    <p class="text-xs text-gray-500 mb-2">Draw your signature below:</p>
+                    <canvas
+                      id="sig-canvas-{{ item.id }}"
+                      width="400" height="160"
+                      class="border border-gray-200 rounded-lg bg-white cursor-crosshair"
+                      style="touch-action: none; max-width: 100%;"
+                    ></canvas>
+                    <div class="flex items-center gap-3 mt-2">
+                      <button type="button" onclick="clearSignature('{{ item.id }}')"
+                              class="text-xs text-gray-400 hover:text-gray-700">Clear</button>
+                      <button type="button" id="sign-btn-{{ item.id }}" onclick="submitSignature('{{ item.id }}')"
+                              class="text-xs font-medium px-3 py-1.5 rounded-lg text-white transition-colors"
+                              style="background-color: {{ brand_color }}; opacity: 0.9;"
+                              onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.9'">
+                        Sign &amp; submit
+                      </button>
+                    </div>
+                    <p id="sig-status-{{ item.id }}" class="text-xs text-gray-400 mt-1 hidden"></p>
+                  </div>
+                </div>
+
+                {% else %}
+                <!-- File upload item -->
+                <div class="mt-3" id="upload-{{ item.id }}">
+                  <label
+                    for="file-{{ item.id }}"
+                    class="inline-flex items-center gap-2 text-xs font-medium px-3 py-2 rounded-lg cursor-pointer transition-colors text-white"
+                    style="background-color: {{ brand_color }}; opacity: 0.9;"
+                    onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.9'"
+                  >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+                    </svg>
+                    <span id="label-{{ item.id }}">Choose file</span>
+                  </label>
+                  <input
+                    type="file"
+                    id="file-{{ item.id }}"
+                    class="hidden"
+                    onchange="handleFileSelect(event, '{{ item.id }}')"
+                  />
+                  <p id="progress-{{ item.id }}" class="text-xs text-gray-400 mt-1 hidden"></p>
+                </div>
+                {% endif %}
               {% endif %}
             </div>
           </div>
@@ -150,7 +250,298 @@
   </div>
 
   <script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+
     const TOKEN = "{{ token }}";
+    const signaturePads = {};
+
+    // Data for in-document signature items
+    const sigItems = {};
+    {% for item in items %}
+    {% if item.item_type == 'signature' and item.sig_page is not none and item.status in ['missing', 'pending'] %}
+    sigItems["{{ item.id }}"] = {
+      page: {{ item.sig_page }},
+      x: {{ item.sig_x }},
+      y: {{ item.sig_y }},
+      w: {{ item.sig_w }},
+      h: {{ item.sig_h }},
+    };
+    {% endif %}
+    {% endfor %}
+
+    // -----------------------------------------------------------------------
+    // Init: legacy signature pads (in-document handled on click)
+    // -----------------------------------------------------------------------
+
+    document.addEventListener('DOMContentLoaded', function() {
+      // Legacy separate-canvas signature items
+      document.querySelectorAll('[id^="sig-canvas-"]').forEach(function(canvas) {
+        const itemId = canvas.id.replace('sig-canvas-', '');
+        if (!signaturePads[itemId]) {
+          signaturePads[itemId] = new SignaturePad(canvas, {
+            backgroundColor: 'rgb(255,255,255)',
+            penColor: '#1a1a2e',
+            minWidth: 0.5,
+            maxWidth: 1.5,
+          });
+        }
+      });
+    });
+
+    // -----------------------------------------------------------------------
+    // PDF viewer state per item
+    // -----------------------------------------------------------------------
+    const pdfState = {};  // { itemId: { pdf, currentPage, numPages, loaded } }
+
+    // -----------------------------------------------------------------------
+    // Toggle document open/close
+    // -----------------------------------------------------------------------
+
+    function toggleDocForSigning(itemId) {
+      const wrapper = document.getElementById(`pdf-wrapper-${itemId}`);
+      const label = document.getElementById(`open-doc-label-${itemId}`);
+      const isOpen = wrapper.style.display !== 'none';
+
+      if (isOpen) {
+        wrapper.style.display = 'none';
+        label.textContent = 'Open document to sign';
+      } else {
+        wrapper.style.display = 'block';
+        label.textContent = 'Close document';
+        if (!pdfState[itemId]?.loaded) {
+          loadPdfForSigning(itemId);
+        }
+      }
+    }
+
+    // -----------------------------------------------------------------------
+    // Load PDF and render first page (or signature page)
+    // -----------------------------------------------------------------------
+
+    async function loadPdfForSigning(itemId) {
+      const pos = sigItems[itemId];
+      if (!pos) return;
+
+      const loadingEl = document.getElementById(`pdf-loading-${itemId}`);
+      const container = document.getElementById(`pdf-container-${itemId}`);
+
+      try {
+        const url = `/portal/r/${TOKEN}/signature/${itemId}/pdf-bytes`;
+        const pdf = await pdfjsLib.getDocument(url).promise;
+
+        pdfState[itemId] = { pdf, currentPage: pos.page + 1, numPages: pdf.numPages, loaded: true };
+
+        if (loadingEl) loadingEl.style.display = 'none';
+        container.style.minHeight = '';
+
+        // Show nav bar
+        const nav = document.getElementById(`pdf-nav-${itemId}`);
+        if (nav) nav.style.display = 'flex';
+
+        // Render the signature page first
+        await renderPdfPage(itemId, pos.page + 1);
+      } catch (err) {
+        console.error('Failed to load PDF for', itemId, err);
+        if (loadingEl) loadingEl.textContent = 'Failed to load document. Please refresh the page.';
+        if (loadingEl) loadingEl.classList.add('text-red-500');
+      }
+    }
+
+    // -----------------------------------------------------------------------
+    // Render a single page (with HiDPI fix)
+    // -----------------------------------------------------------------------
+
+    async function renderPdfPage(itemId, pageNum) {
+      const state = pdfState[itemId];
+      if (!state) return;
+
+      const pos = sigItems[itemId];
+      const container = document.getElementById(`pdf-container-${itemId}`);
+      const pdfCanvas = document.getElementById(`pdf-canvas-${itemId}`);
+      const overlay = document.getElementById(`sig-overlay-${itemId}`);
+      const isSigPage = (pageNum === pos.page + 1);
+
+      const page = await state.pdf.getPage(pageNum);
+      const dpr = window.devicePixelRatio || 1;
+      // Use the wrapper's width (respects mobile viewport) rather than a fixed max
+      const wrapperEl = document.getElementById(`pdf-wrapper-${itemId}`);
+      const availableWidth = wrapperEl?.clientWidth || container.clientWidth || (window.innerWidth - 48);
+      const desiredWidth = Math.min(availableWidth, 600);
+      const unscaled = page.getViewport({ scale: 1 });
+      const scale = desiredWidth / unscaled.width;
+      const viewport = page.getViewport({ scale });
+
+      // HiDPI: canvas draws at dpr × resolution, CSS constrains display size
+      pdfCanvas.width = Math.round(viewport.width * dpr);
+      pdfCanvas.height = Math.round(viewport.height * dpr);
+      pdfCanvas.style.width = viewport.width + 'px';
+      pdfCanvas.style.height = viewport.height + 'px';
+
+      const ctx = pdfCanvas.getContext('2d');
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      await page.render({ canvasContext: ctx, viewport }).promise;
+
+      state.currentPage = pageNum;
+
+      // Update nav
+      document.getElementById(`pdf-pageinfo-${itemId}`).textContent = `Page ${pageNum} of ${state.numPages}`;
+      document.getElementById(`pdf-prev-${itemId}`).disabled = (pageNum <= 1);
+      document.getElementById(`pdf-next-${itemId}`).disabled = (pageNum >= state.numPages);
+
+      // Show/hide signature overlay
+      if (isSigPage) {
+        const oX = pos.x / 100 * viewport.width;
+        const oY = pos.y / 100 * viewport.height;
+        const oW = pos.w / 100 * viewport.width;
+        const oH = pos.h / 100 * viewport.height;
+
+        // Offset for nav bar height
+        const navEl = document.getElementById(`pdf-nav-${itemId}`);
+        const navH = navEl ? navEl.offsetHeight : 0;
+
+        overlay.style.left = oX + 'px';
+        overlay.style.top = (navH + oY) + 'px';
+        overlay.width = Math.round(oW * dpr);
+        overlay.height = Math.round(oH * dpr);
+        overlay.style.width = oW + 'px';
+        overlay.style.height = oH + 'px';
+        overlay.style.display = 'block';
+
+        if (!signaturePads[itemId]) {
+          signaturePads[itemId] = new SignaturePad(overlay, {
+            backgroundColor: 'rgba(0,0,0,0)',
+            penColor: '#1a1a2e',
+            minWidth: 0.5,
+            maxWidth: 1.5,
+          });
+        }
+
+        document.getElementById(`sig-controls-${itemId}`).style.display = 'flex';
+        document.getElementById(`sig-hint-${itemId}`).style.display = 'block';
+      } else {
+        overlay.style.display = 'none';
+        document.getElementById(`sig-hint-${itemId}`).style.display = 'none';
+        // Keep controls visible if pad has a signature already
+        if (!signaturePads[itemId] || signaturePads[itemId].isEmpty()) {
+          document.getElementById(`sig-controls-${itemId}`).style.display = 'none';
+        }
+      }
+    }
+
+    // -----------------------------------------------------------------------
+    // Page navigation
+    // -----------------------------------------------------------------------
+
+    function pdfPrevPage(itemId) {
+      const state = pdfState[itemId];
+      if (state && state.currentPage > 1) renderPdfPage(itemId, state.currentPage - 1);
+    }
+
+    function pdfNextPage(itemId) {
+      const state = pdfState[itemId];
+      if (state && state.currentPage < state.numPages) renderPdfPage(itemId, state.currentPage + 1);
+    }
+
+    // -----------------------------------------------------------------------
+    // In-document signature functions
+    // -----------------------------------------------------------------------
+
+    function clearOverlaySig(itemId) {
+      if (signaturePads[itemId]) signaturePads[itemId].clear();
+    }
+
+    async function submitOverlaySig(itemId) {
+      const pad = signaturePads[itemId];
+      if (!pad || pad.isEmpty()) { alert('Please draw your signature first.'); return; }
+
+      const btn = document.getElementById(`sign-btn-${itemId}`);
+      const statusEl = document.getElementById(`sig-status-${itemId}`);
+      btn.disabled = true;
+      btn.style.opacity = '0.5';
+      statusEl.textContent = 'Uploading signature...';
+      statusEl.classList.remove('hidden', 'text-red-500');
+
+      try {
+        // Export transparent PNG from overlay canvas
+        const dataUrl = pad.toDataURL('image/png');
+
+        // 1. Upload PNG through server
+        const uploadRes = await fetch(`/portal/r/${TOKEN}/items/${itemId}/upload-sig`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image: dataUrl }),
+        });
+        if (!uploadRes.ok) throw new Error('Upload failed');
+        const { file_key } = await uploadRes.json();
+
+        // 3. Acknowledge (server will merge signature onto PDF)
+        statusEl.textContent = 'Generating signed document...';
+        const ackRes = await fetch(`/portal/r/${TOKEN}/items/${itemId}/acknowledge`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ signature_file_key: file_key }),
+        });
+        if (!ackRes.ok) throw new Error('Could not confirm signature');
+
+        // 4. Update UI
+        markItemComplete(itemId, 'Signed — awaiting review');
+      } catch (err) {
+        statusEl.textContent = `Error: ${err.message}. Please try again.`;
+        statusEl.classList.add('text-red-500');
+        btn.disabled = false;
+        btn.style.opacity = '0.9';
+      }
+    }
+
+    // -----------------------------------------------------------------------
+    // Legacy signature functions (separate canvas)
+    // -----------------------------------------------------------------------
+
+    function clearSignature(itemId) {
+      if (signaturePads[itemId]) signaturePads[itemId].clear();
+    }
+
+    async function submitSignature(itemId) {
+      const pad = signaturePads[itemId];
+      if (!pad || pad.isEmpty()) { alert('Please draw your signature first.'); return; }
+
+      const btn = document.getElementById(`sign-btn-${itemId}`);
+      const statusEl = document.getElementById(`sig-status-${itemId}`);
+      btn.disabled = true;
+      btn.style.opacity = '0.5';
+      statusEl.textContent = 'Uploading signature...';
+      statusEl.classList.remove('hidden', 'text-red-500');
+
+      try {
+        const dataUrl = pad.toDataURL('image/png');
+        const uploadRes = await fetch(`/portal/r/${TOKEN}/items/${itemId}/upload-sig`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image: dataUrl }),
+        });
+        if (!uploadRes.ok) throw new Error('Upload failed');
+        const { file_key } = await uploadRes.json();
+
+        statusEl.textContent = 'Confirming...';
+        const ackRes = await fetch(`/portal/r/${TOKEN}/items/${itemId}/acknowledge`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ signature_file_key: file_key }),
+        });
+        if (!ackRes.ok) throw new Error('Could not confirm signature');
+
+        markItemComplete(itemId, 'Signed — awaiting review');
+      } catch (err) {
+        statusEl.textContent = `Error: ${err.message}. Please try again.`;
+        statusEl.classList.add('text-red-500');
+        btn.disabled = false;
+        btn.style.opacity = '0.9';
+      }
+    }
+
+    // -----------------------------------------------------------------------
+    // File upload
+    // -----------------------------------------------------------------------
 
     async function handleFileSelect(event, itemId) {
       const file = event.target.files[0];
@@ -160,11 +551,10 @@
       const progress = document.getElementById(`progress-${itemId}`);
 
       label.textContent = file.name;
-      progress.textContent = 'Preparing upload…';
+      progress.textContent = 'Preparing upload...';
       progress.classList.remove('hidden');
 
       try {
-        // 1. Get presigned upload URL
         const urlRes = await fetch(`/portal/r/${TOKEN}/items/${itemId}/upload-url`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -173,8 +563,7 @@
         if (!urlRes.ok) { throw new Error('Could not get upload URL'); }
         const { file_id, upload_url } = await urlRes.json();
 
-        // 2. Upload directly to Spaces
-        progress.textContent = 'Uploading…';
+        progress.textContent = 'Uploading...';
         const putRes = await fetch(upload_url, {
           method: 'PUT',
           headers: { 'Content-Type': file.type || 'application/octet-stream' },
@@ -182,42 +571,43 @@
         });
         if (!putRes.ok) { throw new Error('Upload failed'); }
 
-        // 3. Confirm
-        progress.textContent = 'Confirming…';
+        progress.textContent = 'Confirming...';
         const confirmRes = await fetch(`/portal/r/${TOKEN}/files/${file_id}/confirm`, {
           method: 'POST',
         });
         if (!confirmRes.ok) { throw new Error('Could not confirm upload'); }
 
-        // 4. Update UI
-        const uploadArea = document.getElementById(`upload-${itemId}`);
-        if (uploadArea) uploadArea.remove();
-
-        const itemEl = document.getElementById(`item-${itemId}`);
-        // Replace empty circle with blue check
-        const icon = itemEl.querySelector('.flex-shrink-0 div');
-        if (icon) {
-          icon.className = 'w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center';
-          icon.innerHTML = `<svg class="w-3.5 h-3.5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-          </svg>`;
-        }
-        // Add status label
-        const titleRow = itemEl.querySelector('.flex.items-center.gap-2');
-        if (titleRow) {
-          const statusSpan = document.createElement('span');
-          statusSpan.className = 'text-xs text-blue-600 font-medium';
-          statusSpan.textContent = 'Submitted — awaiting review';
-          titleRow.appendChild(statusSpan);
-        }
-
-        // Update progress bar
-        updateProgressBar();
-
+        markItemComplete(itemId, 'Submitted — awaiting review');
       } catch (err) {
         progress.textContent = `Error: ${err.message}. Please try again.`;
         progress.classList.add('text-red-500');
       }
+    }
+
+    // -----------------------------------------------------------------------
+    // Shared UI helpers
+    // -----------------------------------------------------------------------
+
+    function markItemComplete(itemId, statusText) {
+      const uploadArea = document.getElementById(`upload-${itemId}`);
+      if (uploadArea) uploadArea.remove();
+
+      const itemEl = document.getElementById(`item-${itemId}`);
+      const icon = itemEl.querySelector('.flex-shrink-0 div');
+      if (icon) {
+        icon.className = 'w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center';
+        icon.innerHTML = `<svg class="w-3.5 h-3.5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+        </svg>`;
+      }
+      const titleRow = itemEl.querySelector('.flex.items-center.gap-2');
+      if (titleRow) {
+        const statusSpan = document.createElement('span');
+        statusSpan.className = 'text-xs text-blue-600 font-medium';
+        statusSpan.textContent = statusText;
+        titleRow.appendChild(statusSpan);
+      }
+      updateProgressBar();
     }
 
     function updateProgressBar() {

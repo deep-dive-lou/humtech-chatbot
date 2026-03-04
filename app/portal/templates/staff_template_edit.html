@@ -5,22 +5,20 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% if tmpl %}Edit Template{% else %}New Template{% endif %} — HumTech Portal</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
 </head>
 <body class="bg-gray-50 text-gray-900 min-h-screen">
 
-  <!-- Header -->
-  <div class="bg-white border-b border-gray-200 sticky top-0 z-10">
-    <div class="max-w-3xl mx-auto px-6 py-4 flex items-center justify-between">
-      <div class="flex items-center gap-3">
-        <a href="/portal/staff/templates" class="text-sm text-gray-400 hover:text-gray-900">← Templates</a>
-        <span class="text-gray-200">|</span>
-        <h1 class="text-lg font-semibold">{% if tmpl %}{{ tmpl.name }}{% else %}New Template{% endif %}</h1>
-      </div>
-      <a href="/portal/staff/logout" class="text-sm text-gray-500 hover:text-gray-900">Sign out</a>
-    </div>
-  </div>
+  {% from "_nav.html" import staff_nav %}
+  {{ staff_nav(staff, active='templates') }}
 
   <div class="max-w-3xl mx-auto px-6 py-8 space-y-6">
+
+    <div class="flex items-center gap-3">
+      <a href="/portal/staff/templates" class="text-sm text-gray-400 hover:text-gray-900">&larr; Templates</a>
+      <span class="text-gray-200">|</span>
+      <h1 class="text-lg font-semibold">{% if tmpl %}{{ tmpl.name }}{% else %}New Template{% endif %}</h1>
+    </div>
 
     <!-- Name + description form -->
     <div class="bg-white rounded-xl border border-gray-200 p-5">
@@ -75,14 +73,21 @@
         {% for item in items %}
         <div class="px-5 py-3 flex items-start gap-3" id="row-{{ item.id }}">
           <div class="flex-1 space-y-1.5">
-            <input
-              type="text"
-              value="{{ item.title }}"
-              placeholder="Document title"
-              class="w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-gray-900"
-              onblur="updateItem('{{ item.id }}', this)"
-              data-field="title"
-            />
+            <div class="flex items-center gap-2">
+              <input
+                type="text"
+                value="{{ item.title }}"
+                placeholder="Document title"
+                class="flex-1 text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-gray-900"
+                onblur="updateItem('{{ item.id }}', this)"
+                data-field="title"
+              />
+              {% if item.item_type == 'signature' %}
+              <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700 flex-shrink-0">Sign</span>
+              {% else %}
+              <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500 flex-shrink-0">Upload</span>
+              {% endif %}
+            </div>
             <input
               type="text"
               value="{{ item.instructions or '' }}"
@@ -91,6 +96,16 @@
               onblur="updateItem('{{ item.id }}', this)"
               data-field="instructions"
             />
+            {% if item.item_type == 'signature' and item.file_key %}
+            <div class="flex items-center gap-3">
+              <p class="text-xs text-gray-400">Document attached</p>
+              <button
+                type="button"
+                onclick="openSigPosModal('{{ item.id }}')"
+                class="text-xs font-medium text-purple-600 hover:underline"
+              >{% if item.sig_page is not none %}Edit signature zone (page {{ item.sig_page + 1 }}){% else %}Set signature position{% endif %}</button>
+            </div>
+            {% endif %}
           </div>
           <div class="flex items-center gap-3 pt-1.5 flex-shrink-0">
             <label class="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer">
@@ -117,13 +132,19 @@
       <div class="px-5 py-4 border-t border-gray-100 bg-gray-50">
         <div class="flex items-start gap-3">
           <div class="flex-1 space-y-1.5">
-            <input
-              type="text"
-              id="new-title"
-              placeholder="New item title"
-              class="w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-gray-900"
-              onkeydown="if(event.key==='Enter'){event.preventDefault();addItem();}"
-            />
+            <div class="flex items-center gap-2">
+              <input
+                type="text"
+                id="new-title"
+                placeholder="New item title"
+                class="flex-1 text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-gray-900"
+                onkeydown="if(event.key==='Enter'){event.preventDefault();addItem();}"
+              />
+              <select id="new-item-type" onchange="toggleFileUpload()" class="text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white">
+                <option value="file_upload">File upload</option>
+                <option value="signature">Document to sign</option>
+              </select>
+            </div>
             <input
               type="text"
               id="new-instructions"
@@ -131,6 +152,10 @@
               class="w-full text-xs border border-gray-100 rounded-lg px-3 py-1.5 bg-white text-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-300"
               onkeydown="if(event.key==='Enter'){event.preventDefault();addItem();}"
             />
+            <div id="new-file-upload" class="hidden">
+              <input type="file" id="new-file" accept=".pdf,.doc,.docx" class="text-xs" />
+              <p id="new-file-status" class="text-xs text-gray-400 mt-1"></p>
+            </div>
           </div>
           <div class="flex items-center gap-3 pt-1.5 flex-shrink-0">
             <label class="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer">
@@ -151,18 +176,67 @@
 
   </div>
 
+  <!-- Signature position modal -->
+  <div id="sigPosModal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center">
+    <div class="bg-white rounded-xl shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] flex flex-col">
+      <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+        <h2 class="text-sm font-semibold">Place signature zone</h2>
+        <div class="flex items-center gap-3">
+          <button id="prevPage" onclick="changePage(-1)" class="text-xs border border-gray-200 px-2 py-1 rounded hover:bg-gray-50">&larr; Prev</button>
+          <span id="pageInfo" class="text-xs text-gray-500">Page 1 / 1</span>
+          <button id="nextPage" onclick="changePage(1)" class="text-xs border border-gray-200 px-2 py-1 rounded hover:bg-gray-50">Next &rarr;</button>
+        </div>
+      </div>
+      <div class="flex-1 overflow-auto p-4 flex justify-center bg-gray-100" id="pdfViewport">
+        <div id="pdfContainer" class="relative inline-block">
+          <canvas id="pdfCanvas"></canvas>
+          <div id="sigZone"
+               class="absolute border-2 border-dashed border-purple-500 bg-purple-100/30 cursor-move hidden"
+               style="min-width: 60px; min-height: 30px;">
+            <div class="absolute -bottom-1 -right-1 w-3 h-3 bg-purple-500 rounded-sm cursor-se-resize" id="sigResize"></div>
+            <p class="text-purple-600 text-xs text-center mt-1 pointer-events-none select-none">Sign here</p>
+          </div>
+        </div>
+      </div>
+      <div class="px-5 py-4 border-t border-gray-100 flex items-center justify-between">
+        <p class="text-xs text-gray-400">Click on the document to place the signature zone. Drag to move, resize from the corner.</p>
+        <div class="flex items-center gap-3">
+          <button onclick="closeSigPosModal()" class="text-xs text-gray-500 hover:text-gray-900">Cancel</button>
+          <button onclick="saveSigPosition()" class="text-xs font-medium bg-gray-900 text-white px-4 py-2 rounded-lg hover:bg-gray-700">Save position</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+
     const TEMPLATE_ID = "{{ tmpl.id if tmpl else '' }}";
 
-    // Item state (title/instructions) tracked locally; saved on blur via PATCH-like POST
     const itemState = {};
     {% for item in items %}
     itemState["{{ item.id }}"] = {
       title: {{ item.title | tojson }},
       instructions: {{ (item.instructions or '') | tojson }},
       required: {{ 'true' if item.required else 'false' }},
+      item_type: {{ (item.item_type or 'file_upload') | tojson }},
+      file_key: {{ (item.file_key or '') | tojson }},
+      sig_page: {{ item.sig_page if item.sig_page is not none else 'null' }},
+      sig_x: {{ item.sig_x if item.sig_x is not none else 'null' }},
+      sig_y: {{ item.sig_y if item.sig_y is not none else 'null' }},
+      sig_w: {{ item.sig_w if item.sig_w is not none else 'null' }},
+      sig_h: {{ item.sig_h if item.sig_h is not none else 'null' }},
     };
     {% endfor %}
+
+    // -----------------------------------------------------------------------
+    // Basic item CRUD
+    // -----------------------------------------------------------------------
+
+    function toggleFileUpload() {
+      const type = document.getElementById('new-item-type').value;
+      document.getElementById('new-file-upload').classList.toggle('hidden', type !== 'signature');
+    }
 
     function updateItemCount() {
       const rows = document.querySelectorAll('#items-list > div');
@@ -174,30 +248,74 @@
       const titleEl = document.getElementById('new-title');
       const instrEl = document.getElementById('new-instructions');
       const reqEl   = document.getElementById('new-required');
+      const typeEl  = document.getElementById('new-item-type');
       const title = titleEl.value.trim();
       if (!title) { titleEl.focus(); return; }
+
+      const item_type = typeEl.value;
+      let file_key = null;
+
+      if (item_type === 'signature') {
+        const fileInput = document.getElementById('new-file');
+        const file = fileInput.files[0];
+        if (!file) { alert('Please select a document to sign'); return; }
+
+        const statusEl = document.getElementById('new-file-status');
+        statusEl.textContent = 'Uploading document...';
+
+        try {
+          const formData = new FormData();
+          formData.append('file', file);
+          const uploadRes = await fetch(`/portal/staff/templates/${TEMPLATE_ID}/upload-doc`, {
+            method: 'POST',
+            body: formData,
+          });
+          if (!uploadRes.ok) { alert('Upload failed: ' + uploadRes.status); statusEl.textContent = ''; return; }
+          const { file_key: fk } = await uploadRes.json();
+          file_key = fk;
+          statusEl.textContent = '';
+        } catch (err) {
+          console.error('Upload error:', err);
+          alert('Upload failed: ' + err.message);
+          statusEl.textContent = '';
+          return;
+        }
+      }
 
       const res = await fetch(`/portal/staff/templates/${TEMPLATE_ID}/items`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, instructions: instrEl.value.trim(), required: reqEl.checked }),
+        body: JSON.stringify({ title, instructions: instrEl.value.trim(), required: reqEl.checked, item_type, file_key }),
       });
       if (!res.ok) { alert('Failed to add item'); return; }
       const item = await res.json();
 
-      // Append row to list
+      const typeBadge = item.item_type === 'signature'
+        ? '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700 flex-shrink-0">Sign</span>'
+        : '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500 flex-shrink-0">Upload</span>';
+
+      const sigBtn = (item.item_type === 'signature' && item.file_key)
+        ? `<div class="flex items-center gap-3">
+             <p class="text-xs text-gray-400">Document attached</p>
+             <button type="button" onclick="openSigPosModal('${item.id}')" class="text-xs font-medium text-purple-600 hover:underline">Set signature position</button>
+           </div>` : '';
+
       const list = document.getElementById('items-list');
       const div = document.createElement('div');
       div.className = 'px-5 py-3 flex items-start gap-3';
       div.id = `row-${item.id}`;
       div.innerHTML = `
         <div class="flex-1 space-y-1.5">
-          <input type="text" value="${escHtml(item.title)}" placeholder="Document title"
-            class="w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-gray-900"
-            onblur="updateItem('${item.id}', this)" data-field="title" />
+          <div class="flex items-center gap-2">
+            <input type="text" value="${escHtml(item.title)}" placeholder="Document title"
+              class="flex-1 text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-gray-900"
+              onblur="updateItem('${item.id}', this)" data-field="title" />
+            ${typeBadge}
+          </div>
           <input type="text" value="${escHtml(item.instructions || '')}" placeholder="Instructions (optional)"
             class="w-full text-xs border border-gray-100 rounded-lg px-3 py-1.5 text-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-300"
             onblur="updateItem('${item.id}', this)" data-field="instructions" />
+          ${sigBtn}
         </div>
         <div class="flex items-center gap-3 pt-1.5 flex-shrink-0">
           <label class="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer">
@@ -208,25 +326,48 @@
         </div>`;
       list.appendChild(div);
 
-      itemState[item.id] = { title: item.title, instructions: item.instructions || '', required: item.required };
+      itemState[item.id] = {
+        title: item.title, instructions: item.instructions || '', required: item.required,
+        item_type: item.item_type, file_key: item.file_key || '',
+        sig_page: null, sig_x: null, sig_y: null, sig_w: null, sig_h: null,
+      };
       titleEl.value = '';
       instrEl.value = '';
       reqEl.checked = true;
+      typeEl.value = 'file_upload';
+      toggleFileUpload();
+      const fileInput = document.getElementById('new-file');
+      if (fileInput) fileInput.value = '';
       titleEl.focus();
       updateItemCount();
+
+      // Auto-open position picker for new signature items
+      if (item.item_type === 'signature' && item.file_key) {
+        setTimeout(() => openSigPosModal(item.id), 300);
+      }
     }
 
-    function updateItem(itemId, input) {
+    async function updateItem(itemId, input) {
       const field = input.dataset.field;
       if (!itemState[itemId]) itemState[itemId] = {};
       itemState[itemId][field] = input.value.trim();
-      // Changes are in-memory; the template already reflects them on blur.
-      // A future enhancement could PATCH to the server here.
+
+      await fetch(`/portal/staff/templates/${TEMPLATE_ID}/items/${itemId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(itemState[itemId]),
+      });
     }
 
-    function updateItemRequired(itemId, checkbox) {
+    async function updateItemRequired(itemId, checkbox) {
       if (!itemState[itemId]) itemState[itemId] = {};
       itemState[itemId].required = checkbox.checked;
+
+      await fetch(`/portal/staff/templates/${TEMPLATE_ID}/items/${itemId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(itemState[itemId]),
+      });
     }
 
     async function deleteItem(templateId, itemId) {
@@ -243,6 +384,200 @@
 
     function escHtml(str) {
       return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    // -----------------------------------------------------------------------
+    // Signature position modal (PDF.js + drag/resize)
+    // -----------------------------------------------------------------------
+
+    let modalItemId = null;
+    let pdfDoc = null;
+    let currentPage = 1;
+    let sigData = { page: 0, x: 30, y: 80, w: 25, h: 8 }; // percentages
+    let canvasW = 0, canvasH = 0;
+    let dragging = false, resizing = false, dragOff = { x: 0, y: 0 };
+
+    async function openSigPosModal(itemId) {
+      modalItemId = itemId;
+      const state = itemState[itemId];
+      if (!state || !state.file_key) { alert('No document uploaded'); return; }
+
+      document.getElementById('sigPosModal').classList.remove('hidden');
+      document.getElementById('sigZone').classList.add('hidden');
+
+      // Load existing position or defaults
+      if (state.sig_page != null) {
+        sigData = { page: state.sig_page, x: state.sig_x, y: state.sig_y, w: state.sig_w, h: state.sig_h };
+        currentPage = state.sig_page + 1;
+      } else {
+        sigData = { page: 0, x: 30, y: 80, w: 25, h: 8 };
+        currentPage = 1;
+      }
+
+      const url = `/portal/staff/templates/${TEMPLATE_ID}/items/${itemId}/pdf-bytes`;
+      try {
+        pdfDoc = await pdfjsLib.getDocument(url).promise;
+        await renderPage(currentPage);
+      } catch (err) {
+        alert('Failed to load PDF: ' + err.message);
+        closeSigPosModal();
+      }
+    }
+
+    function closeSigPosModal() {
+      document.getElementById('sigPosModal').classList.add('hidden');
+      modalItemId = null;
+      pdfDoc = null;
+    }
+
+    async function renderPage(num) {
+      const page = await pdfDoc.getPage(num);
+      const viewport = page.getViewport({ scale: 1.5 });
+      const canvas = document.getElementById('pdfCanvas');
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      canvasW = viewport.width;
+      canvasH = viewport.height;
+      const ctx = canvas.getContext('2d');
+      await page.render({ canvasContext: ctx, viewport }).promise;
+
+      document.getElementById('pageInfo').textContent = `Page ${num} / ${pdfDoc.numPages}`;
+
+      // Show zone if on correct page
+      const zone = document.getElementById('sigZone');
+      if (sigData.page === num - 1) {
+        zone.classList.remove('hidden');
+        positionZone();
+      } else {
+        zone.classList.add('hidden');
+      }
+    }
+
+    function positionZone() {
+      const zone = document.getElementById('sigZone');
+      zone.style.left = (sigData.x / 100 * canvasW) + 'px';
+      zone.style.top = (sigData.y / 100 * canvasH) + 'px';
+      zone.style.width = (sigData.w / 100 * canvasW) + 'px';
+      zone.style.height = (sigData.h / 100 * canvasH) + 'px';
+    }
+
+    function readZone() {
+      const zone = document.getElementById('sigZone');
+      sigData.x = parseFloat(zone.style.left) / canvasW * 100;
+      sigData.y = parseFloat(zone.style.top) / canvasH * 100;
+      sigData.w = parseFloat(zone.style.width) / canvasW * 100;
+      sigData.h = parseFloat(zone.style.height) / canvasH * 100;
+    }
+
+    async function changePage(delta) {
+      if (!pdfDoc) return;
+      const next = currentPage + delta;
+      if (next < 1 || next > pdfDoc.numPages) return;
+      currentPage = next;
+      await renderPage(currentPage);
+    }
+
+    // Click on canvas to place zone
+    document.getElementById('pdfCanvas').addEventListener('click', function(e) {
+      if (dragging || resizing) return;
+      const rect = this.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      const scaleX = canvasW / rect.width;
+      const scaleY = canvasH / rect.height;
+
+      sigData.page = currentPage - 1;
+      sigData.x = (x * scaleX) / canvasW * 100;
+      sigData.y = (y * scaleY) / canvasH * 100;
+      // Keep width/height, but clamp if off-page
+      if (sigData.x + sigData.w > 100) sigData.w = 100 - sigData.x;
+      if (sigData.y + sigData.h > 100) sigData.h = 100 - sigData.y;
+
+      const zone = document.getElementById('sigZone');
+      zone.classList.remove('hidden');
+      positionZone();
+    });
+
+    // Drag zone
+    document.getElementById('sigZone').addEventListener('mousedown', function(e) {
+      if (e.target.id === 'sigResize') return;
+      e.preventDefault();
+      dragging = true;
+      const rect = this.getBoundingClientRect();
+      dragOff.x = e.clientX - rect.left;
+      dragOff.y = e.clientY - rect.top;
+    });
+
+    // Resize handle
+    document.getElementById('sigResize').addEventListener('mousedown', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      resizing = true;
+    });
+
+    document.addEventListener('mousemove', function(e) {
+      if (!dragging && !resizing) return;
+      const container = document.getElementById('pdfContainer');
+      const containerRect = container.getBoundingClientRect();
+      const zone = document.getElementById('sigZone');
+      const scaleX = canvasW / containerRect.width;
+      const scaleY = canvasH / containerRect.height;
+
+      if (dragging) {
+        let newX = (e.clientX - containerRect.left - dragOff.x) * scaleX;
+        let newY = (e.clientY - containerRect.top - dragOff.y) * scaleY;
+        const zw = parseFloat(zone.style.width);
+        const zh = parseFloat(zone.style.height);
+        newX = Math.max(0, Math.min(canvasW - zw, newX));
+        newY = Math.max(0, Math.min(canvasH - zh, newY));
+        zone.style.left = newX + 'px';
+        zone.style.top = newY + 'px';
+      }
+      if (resizing) {
+        let newW = (e.clientX - containerRect.left) * scaleX - parseFloat(zone.style.left);
+        let newH = (e.clientY - containerRect.top) * scaleY - parseFloat(zone.style.top);
+        newW = Math.max(60, Math.min(canvasW - parseFloat(zone.style.left), newW));
+        newH = Math.max(30, Math.min(canvasH - parseFloat(zone.style.top), newH));
+        zone.style.width = newW + 'px';
+        zone.style.height = newH + 'px';
+      }
+    });
+
+    document.addEventListener('mouseup', function() {
+      if (dragging || resizing) {
+        readZone();
+        dragging = false;
+        resizing = false;
+      }
+    });
+
+    async function saveSigPosition() {
+      if (!modalItemId) return;
+      readZone();
+
+      const state = itemState[modalItemId];
+      state.sig_page = sigData.page;
+      state.sig_x = Math.round(sigData.x * 100) / 100;
+      state.sig_y = Math.round(sigData.y * 100) / 100;
+      state.sig_w = Math.round(sigData.w * 100) / 100;
+      state.sig_h = Math.round(sigData.h * 100) / 100;
+
+      const res = await fetch(`/portal/staff/templates/${TEMPLATE_ID}/items/${modalItemId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(state),
+      });
+
+      if (!res.ok) { alert('Failed to save position'); return; }
+
+      // Update the button text in the item row
+      const row = document.getElementById(`row-${modalItemId}`);
+      if (row) {
+        const btn = row.querySelector('button[onclick*="openSigPosModal"]');
+        if (btn) btn.textContent = `Edit signature zone (page ${sigData.page + 1})`;
+      }
+
+      closeSigPosModal();
     }
   </script>
 </body>
