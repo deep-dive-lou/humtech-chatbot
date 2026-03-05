@@ -1288,7 +1288,7 @@ async def staff_download_completed(
 ):
     """Download the completed PDF with all filled zones burned in."""
     item = await conn.fetchrow(
-        """SELECT file_key, label FROM portal.doc_request_items
+        """SELECT file_key, title FROM portal.doc_request_items
            WHERE id = $1::uuid AND request_id = $2::uuid""",
         item_id, request_id,
     )
@@ -1310,7 +1310,7 @@ async def staff_download_completed(
     pdf_data = download_object(item["file_key"])
     merged = merge_zones_onto_pdf(pdf_data, [dict(z) for z in zones], download_object)
 
-    filename = (item["label"] or "document").replace('"', "") + " - completed.pdf"
+    filename = (item["title"] or "document").replace('"', "") + " - completed.pdf"
     return Response(
         content=merged,
         media_type="application/pdf",
