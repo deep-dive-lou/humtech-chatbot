@@ -38,7 +38,7 @@ router = APIRouter(prefix="/bot/webhook", tags=["bot-webhook"])
 # ---------------------------------------------------------------------------
 
 TENANT_LOOKUP_SQL = """
-SELECT tenant_id::text, tenant_slug
+SELECT tenant_id::text, tenant_slug, messaging_adapter
 FROM core.tenants
 WHERE tenant_slug = $1
   AND is_enabled = TRUE
@@ -125,6 +125,7 @@ async def inbound_webhook(tenant_slug: str, request: Request) -> Response:
                             media_type="application/json")
 
         tenant_id = row["tenant_id"]
+        provider = row["messaging_adapter"] or "ghl"
 
         # 2. Extract fields from GHL payload
         # GHL Custom Data fields arrive in body.customData — strip whitespace from keys
@@ -176,13 +177,13 @@ async def inbound_webhook(tenant_slug: str, request: Request) -> Response:
         if ghl_contact_id:
             enriched_payload["contactId"] = ghl_contact_id
 
-        dedupe = _dedupe_key(tenant_slug, "ghl", provider_msg_id, channel, channel_address, text)
+        dedupe = _dedupe_key(tenant_slug, provider, provider_msg_id, channel, channel_address, text)
 
         # 3. Insert inbound event (idempotent)
         inbound_event_id = await conn.fetchval(
             INSERT_INBOUND_EVENT_SQL,
             tenant_id,
-            "ghl",
+            provider,
             event_type,
             provider_msg_id,
             channel,

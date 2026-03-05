@@ -189,3 +189,34 @@ async def send_message(
         "to_address": to_address,
         "raw_response": data,
     }
+
+
+# ---------------------------------------------------------------------------
+# Adapter class — wraps send_message behind MessagingAdapter protocol
+# ---------------------------------------------------------------------------
+
+class GHLMessagingAdapter:
+    """GHL messaging adapter. Delegates to module-level send_message."""
+
+    def __init__(self, conn: Any, tenant_id: str):
+        self.conn = conn
+        self.tenant_id = tenant_id
+
+    async def send_message(
+        self,
+        *,
+        channel: str,
+        to_address: str,
+        text: str,
+        message_id: str,
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        return await send_message(
+            tenant_id=self.tenant_id,
+            provider="ghl",
+            channel=channel,
+            to_address=to_address,
+            text=text,
+            message_id=message_id,
+            metadata=metadata,
+        )

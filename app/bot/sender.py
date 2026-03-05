@@ -4,7 +4,7 @@ from typing import Any
 import asyncpg
 import uuid
 
-from app.adapters.messaging.ghl import send_message
+from app.adapters.messaging import get_messaging_adapter
 from app.bot.tenants import load_tenant, get_messaging_settings
 
 
@@ -194,9 +194,8 @@ async def send_pending_outbound(conn: asyncpg.Connection, limit: int) -> dict[st
 
             else:
                 # LIVE MODE: Call messaging adapter
-                result = await send_message(
-                    tenant_id=tenant_id,
-                    provider=r["provider"],
+                msg_adapter = await get_messaging_adapter(conn, tenant_id)
+                result = await msg_adapter.send_message(
                     channel=r["channel"],
                     to_address=r["channel_address"],
                     text=r["text"] or "",

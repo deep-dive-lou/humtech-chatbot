@@ -8,19 +8,16 @@ import json
 import os
 
 from app.config import settings  # ensures dotenv is loaded
-from app.adapters.calendar.ghl import (
-    get_free_slots,
+from app.adapters.calendar import get_calendar_adapter
+from app.adapters.calendar.slots import (
     filter_slots_by_signals,
     filter_by_availability_windows,
     format_slots_for_display,
     pick_soonest_two_slots,
-    book_slot,
-    cancel_booking,
 )
 from app.bot.routing import route_from_text, route_info_to_dict
 from app.bot.tenants import (
     load_tenant,
-    load_tenant_credentials,
     get_calendar_settings,
     get_booking_config,
     get_llm_settings,
@@ -692,43 +689,10 @@ async def _handle_offer_slots(
     start_dt = now
     end_dt = now + timedelta(days=14)
 
-    # 3) Load GHL access token from tenant credentials (with env var fallback)
-    credentials = await load_tenant_credentials(conn, tenant_id, provider="ghl")
-    ghl_creds = credentials.get("ghl", {})
-    access_token = ghl_creds.get("access_token")
-    if not access_token:
-        out_text = (
-            "Quick one — I'm missing calendar credentials on our side. "
-            "What day works best for you, and would morning, afternoon, or evening be ideal?"
-        )
-        last_offer = {
-            "slots": [],
-            "offered_slots": [],
-            "constraints": {
-                "day": getattr(route_info.signals, "day", None),
-                "time_window": getattr(route_info.signals, "time_window", None),
-                "explicit_time": getattr(route_info.signals, "explicit_time", None),
-            },
-            "offered_at": now.isoformat(),
-            "timezone": timezone,
-            "calendar_check": {
-                "ok": False,
-                "trace_id": None,
-                "calendar_id": calendar_id,
-                "checked_range": {"start": start_dt.isoformat(), "end": end_dt.isoformat()},
-                "returned_slots_count": 0,
-                "filtered_slots_count": 0,
-                "reason": "auth_error",
-                "checked_at": now.isoformat(),
-            },
-        }
-        return out_text, last_offer
-
-    # 4) Call GHL calendar API (with error handling for observability)
+    # 3) Fetch slots via calendar adapter (handles credentials internally)
+    cal_adapter = await get_calendar_adapter(conn, tenant_id)
     try:
-        all_slots, trace_id = await get_free_slots(
-            access_token=access_token,
-            calendar_id=calendar_id,
+        all_slots, trace_id = await cal_adapter.get_free_slots(
             start_dt=start_dt,
             end_dt=end_dt,
             timezone=timezone,
@@ -1150,10 +1114,12 @@ async def process_job(conn: asyncpg.Connection, job_id: str) -> dict[str, Any]:
         # For engage/decline/wants_human/unclear: LLM reply IS the full response
         out_text = llm_preamble
 
+        # Calendar adapter for booking/cancel operations
+        cal_adapter = await get_calendar_adapter(conn, ev.tenant_id)
+
         if intent == "reschedule":
             if booked_booking and isinstance(booked_booking.get("slot"), str):
-                cancel_result = await cancel_booking(
-                    tenant_id=ev.tenant_id,
+                cancel_result = await cal_adapter.cancel_booking(
                     booking_id=booked_booking["booking_id"],
                 )
                 if cancel_result.get("success"):
@@ -1176,8 +1142,7 @@ async def process_job(conn: asyncpg.Connection, job_id: str) -> dict[str, Any]:
 
         elif intent == "cancel":
             if booked_booking and booked_booking.get("booking_id"):
-                cancel_result = await cancel_booking(
-                    tenant_id=ev.tenant_id,
+                cancel_result = await cal_adapter.cancel_booking(
                     booking_id=booked_booking["booking_id"],
                 )
                 if cancel_result.get("success"):
@@ -1207,8 +1172,7 @@ async def process_job(conn: asyncpg.Connection, job_id: str) -> dict[str, Any]:
             if 0 <= slot_index < len(offered_slots):
                 slot_iso = offered_slots[slot_index]
                 slot_matched = slot_iso
-                booking_result = await book_slot(
-                    tenant_id=ev.tenant_id,
+                booking_result = await cal_adapter.book_slot(
                     slot_iso=slot_iso,
                     contact_id=contact_id,
                     conversation_id=conversation_id,
@@ -1243,30 +1207,22 @@ async def process_job(conn: asyncpg.Connection, job_id: str) -> dict[str, Any]:
             explicit_time = llm_result.get("explicit_time") or ""
             target_hour = _parse_explicit_time_to_hour(explicit_time) if explicit_time else None
 
-            # Fetch all available slots
+            # Fetch all available slots via calendar adapter
             tenant_for_slots = await load_tenant(conn, ev.tenant_id)
-            cal_for_slots = get_calendar_settings(tenant_for_slots)
             booking_cfg_for_slots = get_booking_config(tenant_for_slots)
             tz_str = booking_cfg_for_slots.get("timezone", "Europe/London")
-            credentials_for_slots = await load_tenant_credentials(conn, ev.tenant_id, provider="ghl")
-            ghl_creds_for_slots = credentials_for_slots.get("ghl", {})
-            access_token_for_slots = ghl_creds_for_slots.get("access_token")
-            calendar_id_for_slots = cal_for_slots.get("calendar_id")
 
             all_slots_for_specific: list[str] = []
-            if access_token_for_slots and calendar_id_for_slots:
-                _start = now
-                _end = now + timedelta(days=14)
-                try:
-                    all_slots_for_specific, _ = await get_free_slots(
-                        access_token=access_token_for_slots,
-                        calendar_id=calendar_id_for_slots,
-                        start_dt=_start,
-                        end_dt=_end,
-                        timezone=tz_str,
-                    )
-                except Exception:
-                    pass
+            _start = now
+            _end = now + timedelta(days=14)
+            try:
+                all_slots_for_specific, _ = await cal_adapter.get_free_slots(
+                    start_dt=_start,
+                    end_dt=_end,
+                    timezone=tz_str,
+                )
+            except Exception:
+                pass
 
             if target_hour is not None and all_slots_for_specific:
                 nearest = _find_nearest_slot(
@@ -1275,8 +1231,7 @@ async def process_job(conn: asyncpg.Connection, job_id: str) -> dict[str, Any]:
                 if nearest:
                     # Found a slot close enough — book it
                     slot_matched = nearest
-                    booking_result = await book_slot(
-                        tenant_id=ev.tenant_id,
+                    booking_result = await cal_adapter.book_slot(
                         slot_iso=nearest,
                         contact_id=contact_id,
                         conversation_id=conversation_id,
