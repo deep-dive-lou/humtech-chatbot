@@ -1,0 +1,398 @@
+
+=================================================================
+  HAPPY_BOOKER (Sarah Mitchell)
+=================================================================
+
+  Turn 0 [new_lead] -> new_lead
+    Bot:      Hi Sarah, this is Ariyah from HumTech.
+
+The next step is a short call with Chris to walk through your results.
+
+I can offer:
+- Tuesday 09:00
+- Tuesday 14:00
+
+Which works best?
+
+  Turn 1 [inbound_message] -> booked
+    Customer: Tuesday 09:00 works great! Looking forward to it!
+    Bot:      Your call with Chris is confirmed for Tuesday 3 March at 9:00am. It's best to have key performance figures to hand if possible.
+
+Please be on time and allow at least 30 minutes for your appointment - our service is currently in high demand, and we want to optimise our time together.
+
+=================================================================
+  VAGUE_LEAD (Dave Thompson)
+=================================================================
+
+  Turn 0 [new_lead] -> new_lead
+    Bot:      Hi Dave, this is Ariyah from HumTech.
+
+The next step is a short call with Chris to walk through your results.
+
+I can offer:
+- Tuesday 09:00
+- Tuesday 14:00
+
+Which works best?
+
+  Turn 1 [inbound_message] -> unclear
+    Customer: yeah sounds alright, but im pretty busy this week tbh
+    Bot:      No worries — I've got Tuesday 09:00 or Tuesday 14:00 free. Which works best for you?
+
+  Turn 2 [inbound_message] -> offer_slots
+    Customer: umm sometime this week could work i guess, not sure about exact times tho
+    Bot:      I've got Tuesday 09:00 or Tuesday 14:00 free — which works best for you?
+
+  Turn 3 [inbound_message] -> unclear
+    Customer: yeah tuesday could work, maybe the afternoon one?
+    Bot:      No worries — I've got Tuesday 09:00 or Tuesday 14:00 free. Which works best for you?
+
+  Turn 4 [inbound_message] -> unclear
+    Customer: alright, 14:00 on tuesday works for me
+    Bot:      No worries — I've got Tuesday 09:00 or Tuesday 14:00 free. Which works best for you?
+
+  Turn 5 [inbound_message] -> unclear
+    Customer: yeah 14:00 tuesday is good mate
+    Bot:      No worries — I've got Tuesday 09:00 or Tuesday 14:00 free. Which works best for you?
+
+  Turn 6 [inbound_message] -> unclear
+    Customer: look i already said 14:00 on tuesday, that's sorted innit
+    Bot:      No worries — I've got Tuesday 09:00 or Tuesday 14:00 free. Which works best for you?
+
+  Turn 7 [inbound_message] -> booked
+    Customer: mate we're good, already confirmed 14:00 tuesday. what else do you need?
+    Bot:      Your call with Chris is confirmed for Tuesday 3 March at 2:00pm. It's best to have key performance figures to hand if possible.
+
+Please be on time and allow at least 30 minutes for your appointment - our service is currently in high demand, and we want to optimise our time together.
+
+=================================================================
+  TIME_SPECIFIC (Emma Clarke)
+=================================================================
+
+  Turn 0 [new_lead] -> new_lead
+    Bot:      Hi Emma, this is Ariyah from HumTech.
+
+The next step is a short call with Chris to walk through your results.
+
+I can offer:
+- Tuesday 09:00
+- Tuesday 14:00
+
+Which works best?
+
+  Turn 1 [inbound_message] -> booked
+    Customer: Tuesday 09:00 works perfectly for me - I can only do mornings before 10am. Thanks!
+    Bot:      Your call with Chris is confirmed for Tuesday 3 March at 9:00am. It's best to have key performance figures to hand if possible.
+
+Please be on time and allow at least 30 minutes for your appointment - our service is currently in high demand, and we want to optimise our time together.
+
+=================================================================
+  RESCHEDULER (James Wilson)
+=================================================================
+
+  Turn 0 [new_lead] -> new_lead
+    Bot:      Hi James, this is Ariyah from HumTech.
+
+The next step is a short call with Chris to walk through your results.
+
+I can offer:
+- Tuesday 09:00
+- Tuesday 14:00
+
+Which works best?
+
+  Turn 1 [inbound_message] -> booked
+    Customer: Tuesday 09:00 works great for me!
+    Bot:      Your call with Chris is confirmed for Tuesday 3 March at 9:00am. It's best to have key performance figures to hand if possible.
+
+Please be on time and allow at least 30 minutes for your appointment - our service is currently in high demand, and we want to optimise our time together.
+
+=================================================================
+  HUMAN_SEEKER (Linda Brown)
+=================================================================
+
+  Turn 0 [new_lead] -> new_lead
+    Bot:      Hi Linda, this is Ariyah from HumTech.
+
+The next step is a short call with Chris to walk through your results.
+
+I can offer:
+- Tuesday 09:00
+- Tuesday 14:00
+
+Which works best?
+
+  Turn 1 [inbound_message] -> wants_human
+    Customer: Can I speak to an actual person please? I'd prefer to discuss this directly rather than through messages.
+    Bot:      Of course! I'll get someone to reach out to you shortly.
+
+=================================================================
+  DECLINER (Mark Stevens)
+=================================================================
+
+  Turn 0 [new_lead] -> new_lead
+    Bot:      Hi Mark, this is Ariyah from HumTech.
+
+The next step is a short call with Chris to walk through your results.
+
+I can offer:
+- Tuesday 09:00
+- Tuesday 14:00
+
+Which works best?
+
+  Turn 1 [inbound_message] -> unclear
+    Customer: Not interested, please stop contacting me.
+    Bot:      No worries — I've got Tuesday 09:00 or Tuesday 14:00 free. Which works best for you?
+
+  Turn 2 [inbound_message] -> unclear
+    Customer: Not interested.
+    Bot:      No worries — I've got Tuesday 09:00 or Tuesday 14:00 free. Which works best for you?
+
+  Turn 3 [inbound_message] -> unclear
+    Customer: Stop contacting me.
+    Bot:      No worries — I've got Tuesday 09:00 or Tuesday 14:00 free. Which works best for you?
+
+  Turn 4 [inbound_message] -> decline
+    Customer: Please remove my number from your list.
+    Bot:      No problem — if you want to pick this up later, just say so.
+
+=================================================================
+  CONFUSED (Brenda Hughes)
+=================================================================
+
+  Turn 0 [new_lead] -> new_lead
+    Bot:      Hi Brenda, this is Ariyah from HumTech.
+
+The next step is a short call with Chris to walk through your results.
+
+I can offer:
+- Tuesday 09:00
+- Tuesday 14:00
+
+Which works best?
+
+  Turn 1 [inbound_message] -> unclear
+    Customer: Did you pick up the chicken for tonight? We need it by 6!
+    Bot:      No worries — I've got Tuesday 09:00 or Tuesday 14:00 free. Which works best for you?
+
+  Turn 2 [inbound_message] -> unclear
+    Customer: What time is nan coming over? And can you walk the dog before dinner?
+    Bot:      No worries — I've got Tuesday 09:00 or Tuesday 14:00 free. Which works best for you?
+
+  Turn 3 [inbound_message] -> unclear
+    Customer: The dog needs walking before it gets dark, love. Don't forget!
+    Bot:      No worries — I've got Tuesday 09:00 or Tuesday 14:00 free. Which works best for you?
+
+  Turn 4 [inbound_message] -> unclear
+    Customer: Have you fed the cat yet? And did you get milk from the shops?
+    Bot:      No worries — I've got Tuesday 09:00 or Tuesday 14:00 free. Which works best for you?
+
+  Turn 5 [inbound_message] -> unclear
+    Customer: Did you remember to pick up my prescription? I'm running low!
+    Bot:      No worries — I've got Tuesday 09:00 or Tuesday 14:00 free. Which works best for you?
+
+  Turn 6 [inbound_message] -> unclear
+    Customer: Mum needs her tablets refilled too. Can you pop to Boots tomorrow?
+    Bot:      No worries — I've got Tuesday 09:00 or Tuesday 14:00 free. Which works best for you?
+
+  Turn 7 [inbound_message] -> unclear
+    Customer: Is your brother coming for Sunday dinner? Need to know how much food to get!
+    Bot:      No worries — I've got Tuesday 09:00 or Tuesday 14:00 free. Which works best for you?
+
+  Turn 8 [inbound_message] -> unclear
+    Customer: Don't forget to put the washing on! And check if the milk's gone off.
+    Bot:      No worries — I've got Tuesday 09:00 or Tuesday 14:00 free. Which works best for you?
+
+  Turn 9 [inbound_message] -> unclear
+    Customer: Have you hoovered the lounge yet? Your nan hates mess!
+    Bot:      No worries — I've got Tuesday 09:00 or Tuesday 14:00 free. Which works best for you?
+
+=================================================================
+  NEGATION_MULTI (Tom Price)
+=================================================================
+
+  Turn 0 [new_lead] -> new_lead
+    Bot:      Hi Tom, this is Ariyah from HumTech.
+
+The next step is a short call with Chris to walk through your results.
+
+I can offer:
+- Tuesday 09:00
+- Tuesday 14:00
+
+Which works best?
+
+  Turn 1 [inbound_message] -> booked
+    Customer: Monday doesn't work for me, and mornings are out. Could do Tuesday afternoon maybe, around 2 or 3?
+    Bot:      Your call with Chris is confirmed for Tuesday 3 March at 2:00pm. It's best to have key performance figures to hand if possible.
+
+Please be on time and allow at least 30 minutes for your appointment - our service is currently in high demand, and we want to optimise our time together.
+
+=================================================================
+  MINIMAL_RESPONDER (Chris Ward)
+=================================================================
+
+  Turn 0 [new_lead] -> new_lead
+    Bot:      Hi Chris, this is Ariyah from HumTech.
+
+The next step is a short call with Chris to walk through your results.
+
+I can offer:
+- Tuesday 09:00
+- Tuesday 14:00
+
+Which works best?
+
+  Turn 1 [inbound_message] -> unclear
+    Customer: Tuesday 14:00 works.
+    Bot:      No worries — I've got Tuesday 09:00 or Tuesday 14:00 free. Which works best for you?
+
+  Turn 2 [inbound_message] -> booked
+    Customer: Tuesday 14:00
+    Bot:      Your call with Chris is confirmed for Tuesday 3 March at 2:00pm. It's best to have key performance figures to hand if possible.
+
+Please be on time and allow at least 30 minutes for your appointment - our service is currently in high demand, and we want to optimise our time together.
+
+=================================================================
+  AGGRESSIVE (Gary Marsh)
+=================================================================
+
+  Turn 0 [new_lead] -> new_lead
+    Bot:      Hi Gary, this is Ariyah from HumTech.
+
+The next step is a short call with Chris to walk through your results.
+
+I can offer:
+- Tuesday 09:00
+- Tuesday 14:00
+
+Which works best?
+
+  Turn 1 [inbound_message] -> unclear
+    Customer: Just call me back
+    Bot:      No worries — I've got Tuesday 09:00 or Tuesday 14:00 free. Which works best for you?
+
+  Turn 2 [inbound_message] -> unclear
+    Customer: I don't want to book online, get someone to phone me
+    Bot:      No worries — I've got Tuesday 09:00 or Tuesday 14:00 free. Which works best for you?
+
+  Turn 3 [inbound_message] -> unclear
+    Customer: Look, I need to speak to a human right now, not keep texting back and forth. This is ridiculous.
+    Bot:      No worries — I've got Tuesday 09:00 or Tuesday 14:00 free. Which works best for you?
+
+  Turn 4 [inbound_message] -> unclear
+    Customer: This is pointless. Get a manager or someone with actual authority to call me NOW. I'm done with this back and forth.
+    Bot:      No worries — I've got Tuesday 09:00 or Tuesday 14:00 free. Which works best for you?
+
+  Turn 5 [inbound_message] -> unclear
+    Customer: I'm not answering this again. Call me immediately or stop wasting my time.
+    Bot:      No worries — I've got Tuesday 09:00 or Tuesday 14:00 free. Which works best for you?
+
+  Turn 6 [inbound_message] -> unclear
+    Customer: Stop sending me the same message. I want a human to call me right now or I'm going elsewhere.
+    Bot:      No worries — I've got Tuesday 09:00 or Tuesday 14:00 free. Which works best for you?
+
+  Turn 7 [inbound_message] -> unclear
+    Customer: I'm done. Either get someone on the phone in the next hour or lose my business.
+    Bot:      No worries — I've got Tuesday 09:00 or Tuesday 14:00 free. Which works best for you?
+
+  Turn 8 [inbound_message] -> unclear
+    Customer: This is unacceptable. I'm escalating this complaint and cancelling everything unless someone calls me within 30 minutes.
+    Bot:      No worries — I've got Tuesday 09:00 or Tuesday 14:00 free. Which works best for you?
+
+  Turn 9 [inbound_message] -> unclear
+    Customer: You're clearly not listening. I'm filing a complaint with your company and taking my business elsewhere. Do not contact me again unless it's a phone call.
+    Bot:      No worries — I've got Tuesday 09:00 or Tuesday 14:00 free. Which works best for you?
+
+=================================================================
+  POST_BOOKING (Rachel Green)
+=================================================================
+
+  Turn 0 [new_lead] -> new_lead
+    Bot:      Hi Rachel, this is Ariyah from HumTech.
+
+The next step is a short call with Chris to walk through your results.
+
+I can offer:
+- Tuesday 09:00
+- Tuesday 14:00
+
+Which works best?
+
+  Turn 1 [inbound_message] -> unclear
+    Customer: Tuesday 09:00 works great for me!
+    Bot:      No worries — I've got Tuesday 09:00 or Tuesday 14:00 free. Which works best for you?
+
+  Turn 2 [inbound_message] -> unclear
+    Customer: Tuesday 09:00 is perfect!
+    Bot:      No worries — I've got Tuesday 09:00 or Tuesday 14:00 free. Which works best for you?
+
+  Turn 3 [inbound_message] -> booked
+    Customer: Tuesday 09:00 works best for me, let's go with that!
+    Bot:      Your call with Chris is confirmed for Tuesday 3 March at 9:00am. It's best to have key performance figures to hand if possible.
+
+Please be on time and allow at least 30 minutes for your appointment - our service is currently in high demand, and we want to optimise our time together.
+
+  Turn 4 [inbound_message] -> already_booked
+    Customer: Great, thanks for confirming! What is the meeting about exactly?
+    Bot:      You're already booked in for Tuesday 09:00. See you then!
+
+  Turn 5 [inbound_message] -> already_booked
+    Customer: Will it be on Zoom? And how long will it be?
+    Bot:      You're already booked in for Tuesday 09:00. See you then!
+
+  Turn 6 [inbound_message] -> already_booked
+    Customer: Got it! Just need to know - will this be a video call or phone call?
+    Bot:      You're already booked in for Tuesday 09:00. See you then!
+
+=================================================================
+  EMOJI_GIBBERISH (Zoe X)
+=================================================================
+
+  Turn 0 [new_lead] -> new_lead
+    Bot:      Hi Zoe, this is Ariyah from HumTech.
+
+The next step is a short call with Chris to walk through your results.
+
+I can offer:
+- Tuesday 09:00
+- Tuesday 14:00
+
+Which works best?
+
+  Turn 1 [inbound_message] -> unclear
+    Customer: 🎉🌀💫✨🎪
+    Bot:      No worries — I've got Tuesday 09:00 or Tuesday 14:00 free. Which works best for you?
+
+  Turn 2 [inbound_message] -> unclear
+    Customer: 🤖🎸🌊💥🎭🔮
+    Bot:      No worries — I've got Tuesday 09:00 or Tuesday 14:00 free. Which works best for you?
+
+  Turn 3 [inbound_message] -> unclear
+    Customer: 🚀💎🌙⚡🎨🦋
+    Bot:      No worries — I've got Tuesday 09:00 or Tuesday 14:00 free. Which works best for you?
+
+  Turn 4 [inbound_message] -> unclear
+    Customer: !!!🎪🌀💫asdfjkl???
+    Bot:      No worries — I've got Tuesday 09:00 or Tuesday 14:00 free. Which works best for you?
+
+  Turn 5 [inbound_message] -> unclear
+    Customer: 🎯🔥💢🌪️⚙️
+    Bot:      No worries — I've got Tuesday 09:00 or Tuesday 14:00 free. Which works best for you?
+
+  Turn 6 [inbound_message] -> unclear
+    Customer: 🌈🎺🦑💥🎲🔮✨
+    Bot:      No worries — I've got Tuesday 09:00 or Tuesday 14:00 free. Which works best for you?
+
+  Turn 7 [inbound_message] -> unclear
+    Customer: 🎪🌀💫!!!asdfjkl???🔥
+    Bot:      No worries — I've got Tuesday 09:00 or Tuesday 14:00 free. Which works best for you?
+
+  Turn 8 [inbound_message] -> unclear
+    Customer: 🚀💎⚡🎨🌊🦋🎭
+    Bot:      No worries — I've got Tuesday 09:00 or Tuesday 14:00 free. Which works best for you?
+
+  Turn 9 [inbound_message] -> unclear
+    Customer: 🌪️💢🔥🎯⚙️🌈🎺
+    Bot:      No worries — I've got Tuesday 09:00 or Tuesday 14:00 free. Which works best for you?

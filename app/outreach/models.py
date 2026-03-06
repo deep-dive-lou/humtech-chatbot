@@ -74,7 +74,8 @@ SELECT
     p.review_status,
     p.evidence_used,
     p.risk_flags,
-    p.removed
+    p.removed,
+    l.status AS lead_status
 FROM outreach.leads l
 JOIN outreach.personalisation p ON p.lead_id = l.lead_id
 WHERE l.batch_date = $1::date
@@ -92,7 +93,8 @@ GET_BATCH_COUNTS_SQL = """
 SELECT
     COUNT(*) FILTER (WHERE p.review_status = 'auto_send'    AND p.removed = FALSE) AS auto_send,
     COUNT(*) FILTER (WHERE p.review_status = 'needs_review' AND p.removed = FALSE) AS needs_review,
-    COUNT(*) FILTER (WHERE p.review_status = 'blocked'      AND p.removed = FALSE) AS blocked
+    COUNT(*) FILTER (WHERE p.review_status = 'blocked'      AND p.removed = FALSE) AS blocked,
+    COUNT(*) FILTER (WHERE l.status = 'sent'                AND p.removed = FALSE) AS sent
 FROM outreach.leads l
 JOIN outreach.personalisation p ON p.lead_id = l.lead_id
 WHERE l.batch_date = $1::date;
@@ -226,7 +228,7 @@ async def get_batch(conn: asyncpg.Connection, batch_date: date) -> list[dict]:
 
 async def get_batch_counts(conn: asyncpg.Connection, batch_date: date) -> dict:
     row = await conn.fetchrow(GET_BATCH_COUNTS_SQL, batch_date)
-    return dict(row) if row else {"auto_send": 0, "needs_review": 0, "blocked": 0}
+    return dict(row) if row else {"auto_send": 0, "needs_review": 0, "blocked": 0, "sent": 0}
 
 
 async def update_opener(

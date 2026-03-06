@@ -127,6 +127,11 @@ async def load_tenant_credentials(
         if env_token:
             credentials["ghl"] = {"access_token": env_token}
 
+    if not credentials.get("hubspot"):
+        env_token = os.getenv("HUBSPOT_ACCESS_TOKEN")
+        if env_token:
+            credentials["hubspot"] = {"access_token": env_token}
+
     return credentials
 
 

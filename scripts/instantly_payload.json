@@ -1,0 +1,150 @@
+{
+  "parent_campaign": "76fc48b8-aa92-426e-8291-212fa3b4ee39",
+  "name": "Main Sequence",
+  "sequences": [
+    {
+      "steps": [
+        {
+          "type": "email",
+          "delay": 0,
+          "variants": [
+            {
+              "subject": "{{companyName}} AI Diagnosis tool for {{firstName}}",
+              "body": "Hi {{firstName}},\n\n{{personalization}}\n\nI wondered if {{companyName}} has an AI revenue growth strategy in place?\n\nIf not, our 'Done for You' AI system increases revenue or don't pay - no retainer or implementation costs, and it takes a few weeks to integrate into existing software/infrastructure, with zero upheaval.\n\nYou can use our FREE AI Diagnostic here to see if this might benefit you specifically: https://humtech.ai/free-ai-diagnostic\n\nThis will estimate the potential revenue increase (if you're not already at the cutting edge of the AI revolution).\n\nThe output is helpful even if you don't use our service: it highlights revenue leakage across multiple domains, with AI recommendations tailored to your responses in a handy PDF which can be shared within your organisation.\n\nIf you're looking to increase revenue with AI in 2026 and don't know where to start, let's jump on a call. No big sell, just to see if we can help solve problems and/or add value.\n\nBest wishes,\n{{signature}}"
+            }
+          ]
+        },
+        {
+          "type": "email",
+          "delay": 3,
+          "variants": [
+            {
+              "subject": "The #1 ad agency on Trust Pilot. You can check. {{companyName}} revenue increase with AI, zero cost",
+              "body": "Hi {{firstName}},\n\nOur brand RESG has been the UK's #1 Advertising Agency on Trust Pilot for years (see for yourself) - you'll spot my name on Companies House too (saved you a minute). We use our custom-built neural network AI system, so it's impossible for businesses to compete with our CRO/CAC. We're the only ones doing it, that's why we're on top.\n\nIf you'd like to see if we can roll this out for {{companyName}}, use our FREE AI Diagnostic: https://humtech.ai/free-ai-diagnostic\n\nEven smaller SMEs discover £200k+ revenue leakage hiding in plain sight using our AI engine. It's possible to have good P&L/margins and still be leaving a fortune on the table.\n\nIf you're eager not to lose out to the competition in 2026 as they inevitably roll out AI acquisition and conversion models like ours, complete our diagnostic and we'll see if we can help.\n\nWe have 3 new client spaces left for Q1.\n\nZero retainers or upfront costs, only pay if you win.\n\nBest wishes,\n{{signature}}"
+            }
+          ]
+        },
+        {
+          "type": "email",
+          "delay": 4,
+          "variants": [
+            {
+              "subject": "{{companyName}} – Conversion increase, zero cost",
+              "body": "Hi {{firstName}},\n\nHope you had chance to run the FREE AI Diagnostic: https://humtech.ai/free-ai-diagnostic\n\nMost financial services firms like {{companyName}} discover £200k+ revenue leakage hiding in plain sight. RESG UK increased revenue by 400% from 2023-2024 – the competition couldn't keep up.\n\nQuick question: when clients call asking for financial advice, what % convert to becoming clients? Our clients hit 34% improvement within 60 days…\n\nThe gap? Advisors guessing scripts and performing repetitive tasks, instead of focusing on revenue generating tasks only. We've seen sales reps:\n\n- Requesting docs and facilitating compliance\n- Engaging leads which should have booked automatically\n- Getting ghosted and losing motivation\n- Missing KPI targets and blaming lead quality\n- Following outdated sales SOPs\n\nOur system fixes this automatically - no software swap. Just revenue. Does pinning down your exact conversion gap interest you?\n\nZero retainers or upfront costs, only pay if you win.\n\nBest wishes,\n{{signature}}"
+            }
+          ]
+        },
+        {
+          "type": "email",
+          "delay": 4,
+          "variants": [
+            {
+              "subject": "{{companyName}}: 98% sales appointment attendance / 56% rev increase",
+              "body": "Hi {{firstName}},\n\nQuick case study from high-volume outbound sales agency RESG UK who used our 'pay on results only' AI revenue engine to increase revenue by 56% in 12 months.\n\nBefore:\n- Only 10-15% of leads scheduled appointments through manual outreach\n- Around 50% appointment attendance on a good month\n- Sales team wasting time on engagement outreach plus manual admin\n- Zero martech for multivariate testing and statistical analysis\n\nResult:\n- 80%+ automated booking rate\n- 98% appointment attendance\n- 40% revenue increase\n- 10hrs saved/rep/week\n- 50% reduced customer acquisition cost\n\n\"HumTech's system found revenue we didn't know was missing\" - CFO\n\nAI spots patterns humans miss…\n\nTakes 3 weeks to deploy over your CRM and current systems. We have 2 spots left for Q1 for our zero cost/retainer, pay on results only offer.\n\nIt's best to complete the diagnostic here to make sure we're a good fit first: https://humtech.ai/free-ai-diagnostic\n\nThen you can use our AI to schedule a call.\n\nZero retainers or upfront costs, only pay if you win.\n\nBest wishes,\n{{signature}}"
+            }
+          ]
+        },
+        {
+          "type": "email",
+          "delay": 5,
+          "variants": [
+            {
+              "subject": "{{firstName}} – We became #1 Trustpilot Advertising Agency, as an AI agency…",
+              "body": "Hi {{firstName}},\n\nMost firms chase AI shiny objects. Winners deploy proven revenue engines.\n\nIn 24 months, our AI Revenue Engine:\n- Powered #4 rated Green Energy Supplier\n- Built #1 rated Advertising Agency on Trustpilot (4.9/5.0 stars)\n- Utilised a team of just 4 people – no big payroll\n\nThey didn't swap CRM. Didn't hire data scientists. Just layered our system over existing ops and let us do the heavy lifting.\n\nResult: 380% revenue increase Year 1. 660% increase Year 2. Paid from results only.\n\nCurious how #1 Trustpilot firms operationalize AI?\n\nTakes 3 minutes: https://humtech.ai/free-ai-diagnostic (circulate the PDF output with your colleagues)\n\nBest wishes,\n{{signature}}"
+            }
+          ]
+        },
+        {
+          "type": "email",
+          "delay": 7,
+          "variants": [
+            {
+              "subject": "{{firstName}} – how many hours do advisors waste on admin?",
+              "body": "Hi {{firstName}},\n\nWhat % of your team's day goes to manual data entry, follow-ups, and chasing leads?\n\nIndustry average: 4.2 hours/day per rep. That's 1,100 hours/year per advisor lost to admin drudgery. Do the math – hourly rate x 1,100 x total staff = shock horror. This is almost always 6 figures annually for high volume SME's.\n\nOur automation + time deflection system handles this at no cost.\n\nAdvisors focus 100% on closing.\n\nResult: 2-4 extra hours/day per rep = £187k avg. capacity increase Year 1. Zero software swap. Does automating the busywork (so they sell) sound worth 3 minutes?\n\nUse our free diagnostic calculator and share the results with your colleagues: https://humtech.ai/free-ai-diagnostic\n\nZero retainers or upfront costs, only pay if you win.\n\nBest wishes,\n{{signature}}"
+            }
+          ]
+        },
+        {
+          "type": "email",
+          "delay": 7,
+          "variants": [
+            {
+              "subject": "{{firstName}} – \"if you don't measure it, you can't manage it\"",
+              "body": "Hi {{firstName}},\n\n\"If you don't measure it, you can't manage it.\" and \"you don't know what you don't know\" are our mantras.\n\nWe've seen so many firms in financial services miss the silent killers which eat profits like termites eat wood – you probably don't even see them!\n\nHere's a small sample:\n\nTime-to-lead engagement: how fast you conversationally engage (>1hr = 67% fewer conversions)\nLead Velocity Rate: Speed of leads moving from initial contact to qualified opportunity\nPipeline Coverage Ratio: Ratio of pipeline value to sales quota\nSales Cycle Length: Average days from lead to close\n\nThere are many more, and missing just one vital stat leaves a big hole in your bucket.\n\nOur Clarity Engine tracks EVERY vital metric automatically, and in one place.\n\nWhat you fix: Advisor bottlenecks, process leaks, revenue gaps.\n\nResult: MASSIVE close rate lift from metrics you didn't know existed. Does seeing your hidden conversion gaps interest you? Find out if it might work for you here:\n\nhttps://humtech.ai/free-ai-diagnostic\n\nTakes less than 3 minutes - Get immediate results - Completely free.\n\nZero retainers or upfront costs, only pay if you win.\n\nBest wishes,\n{{signature}}"
+            }
+          ]
+        },
+        {
+          "type": "email",
+          "delay": 7,
+          "variants": [
+            {
+              "subject": "{{firstName}} - eliminate document request risk, increase adherence",
+              "body": "Hi {{firstName}},\n\nQuick risk question for {{companyName}}: when clients email sensitive docs, what happens if they fat-finger the address?\n\nGDPR/ICO reality: Wrong recipient = £20M fine risk (E.g. British Airways in 2020). Email chains also fail \"secure processing\" audits. Most \"docu-sign\" portals claim compliance but store on US servers – not UK data protection territory. Add generic branding into the mix and you have zero trust, and poor response rates (lots of chasing).\n\nOur Branded Document Request Portal fixes this:\n\n- UK servers only – ICO/GDPR bulletproof\n- Your logo/domain – client trust goes up, and so does response rate\n- Auto chases late documents so your team don't have to\n- One-click expiry – docs auto-delete post-processing\n- Audit trail – every upload tracked\n\nResult: Zero compliance risk + 47% faster client onboarding (no back-and-forth) and 40% increase in adherence. Does client doc security + speed interest you?\n\nReach out to book a quick call or use our FREE AI Diagnostic to see if there's a good use case for {{companyName}}: https://humtech.ai/free-ai-diagnostic\n\nBest wishes,\n{{signature}}"
+            }
+          ]
+        },
+        {
+          "type": "email",
+          "delay": 6,
+          "variants": [
+            {
+              "subject": "{{firstName}} - No longer \"the big that beats the small\" it's \"the fast that runs over the slow\"",
+              "body": "Hi {{firstName}},\n\nIt's no longer \"the big that beats the small\" it's \"the fast that runs over the slow\"\n\nEngagement Latency: The time gap between customer interest and your business's meaningful response.\n\nYour competition is already closing this gap with AI. If you don't program instantaneous conversational AI by phone/SMS/Email, you're invisible…\n\nThat lead who reached out on a Sunday or 9pm at night? Your competitor's system picked them up and closed the sale before you're even back in the office.\n\nSpeed is now the ultimate currency and 'lead response latency' is the difference between closing a deal and losing it to a competitor who instantly responds.\n\nMost companies believe buying updated software fixes this, but they lack the adaptive ecosystem to make it work.\n\nYou have the tools... but not the strategy.\n\nYou Need a Fractional AI Growth Team That Measures and Optimizes:\n1. Engagement Latency\n2. Handling Time vs. Deflection Savings\n3. Opportunity Cost\n\nSounds like it should be expensive, but our system works so well that you only pay if we increase your revenue.\n\nRun your engagement figures through our FREE AI Diagnostic to find out how much money you're losing to latency: https://humtech.ai/free-ai-diagnostic\n\nBest wishes,\n{{signature}}"
+            }
+          ]
+        },
+        {
+          "type": "email",
+          "delay": 7,
+          "variants": [
+            {
+              "subject": "{{firstName}} – are vague leads killing your close rates?",
+              "body": "Hi {{firstName}},\n\nQuick thought - do your Google/FB ads attract browsers and ghosts instead of qualified buyers ready to commit? This is usually down to the absence of high-level multivariate testing + weak avatar targeting.\n\n73% of leads drop because creatives/copy/AI don't pre-qualify \"serious vs curious\".\n\nOur system fixes this automatically:\n\n- Martech A/B testing across landing pages, forms, CTAs\n- Conversion modules → pixel data to ad platforms (right avatar = 3x ROAS)\n- AI copywriting + creative optimization (tested vs your current set up)\n- Integrates over existing CRM, no upheaval\n\nResult: Min 30% lead-to-sale conversion (vs industry 9%). Does dialling in your ad→close funnel interest you?\n\nZero retainers or upfront costs, only pay if you win.\n\nhttps://humtech.ai/free-ai-diagnostic\n\nBest wishes,\n{{signature}}"
+            }
+          ]
+        },
+        {
+          "type": "email",
+          "delay": 14,
+          "variants": [
+            {
+              "subject": "{{firstName}} – your custom AI Revenue Engine, Done for You?",
+              "body": "Hi {{firstName}},\n\nMost AI vendors sell \"boxes\". We build your custom AI Revenue Engine – diagnosed, deployed, optimised by senior specialists. Our 5-step process (used by #1 Trustpilot firms):\n\n1. Baseline Assessment – gap audit\n2. Strategic Direction – prioritise EBITDA opportunities\n3. Layered Implementation – zero software swap, 3 weeks live\n4. Go-Live Optimisation – conversion maximisation guaranteed\n5. On-Demand Team – we run it, you profit\n\n\"Companies that will succeed will be the ones that most effectively use AI. If you're making maximum use of AI and competing against someone who isn't, you will win.\" – Elon Musk\n\nYour multidisciplinary AI team, paid from results only. Does a custom revenue engine interest you?\n\nGet your FREE AI Diagnostic PDF: https://humtech.ai/free-ai-diagnostic\n\nBest wishes,\n{{signature}}"
+            }
+          ]
+        },
+        {
+          "type": "email",
+          "delay": 2,
+          "variants": [
+            {
+              "subject": "{{firstName}} – 4 typical AI wins we layer onto your stack, zero cost",
+              "body": "Hi {{firstName}},\n\nNo \"out-the-box\" AI packages. We add these proven modules to your existing set up:\n\n- Agents/Conversational AI → faster qualification\n- 4+ hours/rep freed: Automation → no more manual drudgery\n- 28% close rate: Operational Clarity → track time-to-engagement\n- 3x ROAS: Done-for-you martech → right avatar targeting\n\nZero disruption. We diagnose → deploy → optimise. You carry on doing what you do best. Which module interests you most? Takes 3 minutes to map to {{companyName}}: https://humtech.ai/free-ai-diagnostic\n\nBest wishes,\n{{signature}}"
+            }
+          ]
+        },
+        {
+          "type": "email",
+          "delay": 8,
+          "variants": [
+            {
+              "subject": "Where do we go from here?",
+              "body": "Hi {{firstName}},\n\nI reached out a few times re zero cost AI systems for {{companyName}} but didn't hear back.\n\nWhere do we go from here?\n\nBest wishes,\n{{signature}}"
+            }
+          ]
+        },
+        {
+          "type": "email",
+          "delay": 7,
+          "variants": [
+            {
+              "subject": "AI and automation revenue systems for {{companyName}}?",
+              "body": "Hi {{firstName}},\n\nAre you interested in AI and automation revenue systems for {{companyName}}?\n\nBest wishes,\n{{signature}}"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

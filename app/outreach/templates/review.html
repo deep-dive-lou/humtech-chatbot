@@ -43,6 +43,11 @@
       </div>
       <div class="flex items-center gap-4">
         <span class="text-sm text-white/60">{{ leads|length }} leads</span>
+        {% if batch_sent %}
+        <span class="text-sm font-semibold px-4 py-2 rounded-lg bg-green-500/20 text-green-300 border border-green-500/30">
+          Pushed {{ counts.sent }} to Instantly
+        </span>
+        {% else %}
         <button
           id="send-btn"
           onclick="sendBatch()"
@@ -51,6 +56,7 @@
         >
           Send {{ leads|length }} &rarr;
         </button>
+        {% endif %}
       </div>
     </div>
   </div>
@@ -69,9 +75,12 @@
         <p class="text-xs text-gray-500 truncate">{{ lead.company or '' }}</p>
         <div class="flex items-center gap-2 mt-1">
           <span class="text-xs px-1.5 py-0.5 rounded
-            {% if lead.review_status == 'auto_send' %}bg-green-100 text-green-700
+            {% if lead.lead_status == 'sent' %}bg-green-100 text-green-700
+            {% elif lead.review_status == 'auto_send' %}bg-emerald-50 text-emerald-600
             {% else %}bg-yellow-100 text-yellow-700{% endif %}">
-            {% if lead.review_status == 'auto_send' %}auto{% else %}review{% endif %}
+            {% if lead.lead_status == 'sent' %}sent
+            {% elif lead.review_status == 'auto_send' %}auto
+            {% else %}review{% endif %}
           </span>
           <span class="text-xs text-gray-400">{{ (lead.confidence_score * 100)|int }}%</span>
         </div>
@@ -257,8 +266,8 @@
     const resp = await fetch(`/outreach/send?batch_date=${batchDate}`, {method: 'POST'});
     const data = await resp.json();
     if (resp.ok && data.ok) {
-      btn.textContent = `Done - ${data.sent} sent`;
-      toast(`${data.sent} leads queued`);
+      toast(`${data.sent} leads pushed to Instantly`);
+      setTimeout(() => window.location.reload(), 1000);
     } else {
       btn.disabled = false;
       btn.textContent = 'Send \u2192';

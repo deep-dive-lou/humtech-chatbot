@@ -1,0 +1,159 @@
+{
+  "run_at": "2026-03-02T12:15:58.178855Z",
+  "summary": {
+    "total_conversations": 1,
+    "outcomes": {
+      "booked": 0,
+      "declined": 0,
+      "wants_human": 0,
+      "unclear": 0,
+      "stuck": 1,
+      "error": 0,
+      "booking_failed": 0
+    },
+    "goals_achieved": 1,
+    "goals_missed": 0
+  },
+  "coverage": {
+    "intents_triggered": [
+      "select_slot"
+    ],
+    "intents_missed": [
+      "decline",
+      "request_slots",
+      "request_specific_time",
+      "reschedule",
+      "unclear",
+      "wants_human"
+    ],
+    "intent_coverage": "1/7",
+    "routes_triggered": [
+      "booked",
+      "engage",
+      "new_lead"
+    ],
+    "routes_missed": [
+      "already_booked",
+      "booking_failed",
+      "decline",
+      "handoff_pending",
+      "offer_slots",
+      "request_slots",
+      "request_specific_time",
+      "reschedule_failed",
+      "reschedule_offer",
+      "unclear",
+      "wants_human"
+    ],
+    "route_coverage": "2/13"
+  },
+  "personas": [
+    {
+      "persona_id": "post_booking",
+      "persona_name": "Rachel Green",
+      "turns": 10,
+      "final_route": "engage",
+      "expected_terminal": "booked",
+      "goal_achieved": true,
+      "route_sequence": [
+        "new_lead",
+        "booked",
+        "engage",
+        "engage",
+        "engage",
+        "engage",
+        "engage",
+        "engage",
+        "engage",
+        "engage"
+      ],
+      "conversation_id": "03426fc2-08de-4a7b-9f85-992e3a24cf76",
+      "error": null
+    }
+  ],
+  "edge_cases": [
+    {
+      "persona": "post_booking",
+      "issue": "Stuck at max turns (final route: engage)"
+    }
+  ],
+  "transcripts": [
+    {
+      "persona_id": "post_booking",
+      "persona_name": "Rachel Green",
+      "channel_address": "+44775172800",
+      "turns": [
+        {
+          "turn": 0,
+          "event_type": "new_lead",
+          "customer": "",
+          "bot": "Hi Rachel, this is Ariyah from HumTech.\n\nThe next step is a short call with Chris to walk through your results.\n\nI can offer:\n- Tuesday 09:00\n- Tuesday 14:00\n\nWhich works best?",
+          "route": "new_lead"
+        },
+        {
+          "turn": 1,
+          "event_type": "inbound_message",
+          "customer": "Tuesday 09:00 works great for me!",
+          "bot": "Perfect! Let me get that booked for you. Your call with Chris is confirmed for Tuesday 3 March at 9:00am. It's best to have key performance figures to hand if possible.\n\nPlease be on time and allow at least 30 minutes for your appointment - our service is currently in high demand, and we want to optimise our time together.",
+          "route": "booked"
+        },
+        {
+          "turn": 2,
+          "event_type": "inbound_message",
+          "customer": "What is the meeting about exactly?",
+          "bot": "Great question! It's a discovery call with Chris to walk through your current setup and results, and explore whether there's a fit for how we can help accelerate your revenue with AI-powered systems. You're all set for Tuesday at 9am!",
+          "route": "engage"
+        },
+        {
+          "turn": 3,
+          "event_type": "inbound_message",
+          "customer": "Will it be on Zoom?",
+          "bot": "Yes, it'll be on Zoom \u2014 you'll get the link in a confirmation email shortly. See you Tuesday at 9am!",
+          "route": "engage"
+        },
+        {
+          "turn": 4,
+          "event_type": "inbound_message",
+          "customer": "How long will it be?",
+          "bot": "About 15 minutes \u2014 nice and focused. You're all set for Tuesday at 9am!",
+          "route": "engage"
+        },
+        {
+          "turn": 5,
+          "event_type": "inbound_message",
+          "customer": "Got it, thanks! Should I prepare any specific documents besides the KPIs you mentioned?",
+          "bot": "Good thinking! KPIs are the main thing \u2014 Chris will want to understand your current metrics. No need for anything else formal. You're all set for Tuesday!",
+          "route": "engage"
+        },
+        {
+          "turn": 6,
+          "event_type": "inbound_message",
+          "customer": "Perfect, will do. Is there anything else I should know before the call?",
+          "bot": "You're all set! Just have those KPIs handy, join a few minutes early, and we'll take it from there. Looking forward to chatting Tuesday at 9am!",
+          "route": "engage"
+        },
+        {
+          "turn": 7,
+          "event_type": "inbound_message",
+          "customer": "Sounds good! What's Chris's last name so I know who to look for on the call?",
+          "bot": "Great question! Chris is our commercial director \u2014 you'll see his name on the Zoom invite when it comes through. See you Tuesday!",
+          "route": "engage"
+        },
+        {
+          "turn": 8,
+          "event_type": "inbound_message",
+          "customer": "Perfect, thanks for clarifying! Should I have any budget figures ready to discuss too?",
+          "bot": "Good idea \u2014 having a rough budget range in mind is helpful so Chris can understand your scope. You're all set for Tuesday at 9am!",
+          "route": "engage"
+        },
+        {
+          "turn": 9,
+          "event_type": "inbound_message",
+          "customer": "Will there be anyone else joining the call besides me and Chris?",
+          "bot": "It'll just be you and Chris \u2014 nice and focused. You're all set for Tuesday at 9am!",
+          "route": "engage"
+        }
+      ]
+    }
+  ]
+}

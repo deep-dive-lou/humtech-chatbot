@@ -47,6 +47,8 @@ async def review_page(request: Request, batch_date: Optional[str] = None):
                 row[k] = float(v)
         all_leads.append(row)
 
+    batch_sent = counts.get("sent", 0) > 0
+
     return templates.TemplateResponse("review.html", {
         "request": request,
         "batch_date": today.strftime("%d %b %Y").lstrip("0"),
@@ -56,6 +58,7 @@ async def review_page(request: Request, batch_date: Optional[str] = None):
         "today_iso": date.today().isoformat(),
         "counts": counts,
         "leads": all_leads,
+        "batch_sent": batch_sent,
     })
 
 
