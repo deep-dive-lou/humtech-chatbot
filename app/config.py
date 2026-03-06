@@ -28,6 +28,11 @@ class Settings:
     spaces_secret: str = os.getenv("SPACES_SECRET", "")
     portal_jwt_secret: str = os.getenv("PORTAL_JWT_SECRET", "dev-secret-change-in-prod")
 
+    # AWS SES (email sending)
+    aws_ses_region: str = os.getenv("AWS_SES_REGION", "eu-west-2")
+    aws_ses_access_key_id: str = os.getenv("AWS_SES_ACCESS_KEY_ID", "")
+    aws_ses_secret_access_key: str = os.getenv("AWS_SES_SECRET_ACCESS_KEY", "")
+
     # Monitoring
     slack_webhook_url: str = os.getenv("SLACK_WEBHOOK_URL", "")
     monitor_interval_seconds: int = int(os.getenv("MONITOR_INTERVAL_SECONDS", "300"))

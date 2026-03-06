@@ -38,10 +38,19 @@
       </div>
       <div class="flex items-center gap-3">
         {% if req.status not in ['completed', 'cancelled'] %}
+        {% if email_enabled %}
+        <button
+          id="sendEmailBtn"
+          onclick="sendEmail()"
+          class="text-sm font-medium bg-gray-900 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors"
+        >
+          Send to client
+        </button>
+        {% endif %}
         <button
           id="copyLinkBtn"
           onclick="generateLink()"
-          class="text-sm font-medium bg-gray-900 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors"
+          class="text-sm font-medium {{ 'border border-gray-300 text-gray-600 hover:bg-gray-50' if email_enabled else 'bg-gray-900 text-white hover:bg-gray-700' }} px-4 py-2 rounded-lg transition-colors"
         >
           Copy link
         </button>
@@ -84,7 +93,8 @@
       <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
       </svg>
-      This request is a draft — the client has not been sent a link yet. Use <strong class="font-semibold">Copy link</strong> to get a shareable link.
+      This request is a draft — the client has not been sent a link yet.
+      {% if email_enabled %}Use <strong class="font-semibold">Send to client</strong> to email the link directly.{% else %}Use <strong class="font-semibold">Copy link</strong> to get a shareable link.{% endif %}
     </div>
   </div>
   {% endif %}
@@ -124,6 +134,11 @@
         <button onclick="closeModal()" class="text-sm text-gray-500 hover:text-gray-900">Close</button>
       </div>
     </div>
+  </div>
+
+  <!-- Email sent toast -->
+  <div id="emailToast" class="hidden fixed top-4 right-4 z-50 bg-green-600 text-white px-5 py-3 rounded-lg shadow-lg text-sm font-medium transition-opacity duration-300">
+    Email sent to <span id="emailToastAddr"></span>
   </div>
 
   <div class="max-w-5xl mx-auto px-6 py-8 space-y-8">
@@ -322,6 +337,30 @@
         document.getElementById('linkModal').classList.remove('hidden');
       } finally {
         btn.textContent = 'Copy link';
+        btn.disabled = false;
+      }
+    }
+
+    async function sendEmail() {
+      const btn = document.getElementById('sendEmailBtn');
+      btn.textContent = 'Sending...';
+      btn.disabled = true;
+      try {
+        const res = await fetch(`/portal/staff/requests/${requestId}/send-email`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+        });
+        const data = await res.json();
+        if (!res.ok) { alert(data.error || 'Failed to send email'); return; }
+        // Show toast
+        document.getElementById('emailToastAddr').textContent = data.email;
+        const toast = document.getElementById('emailToast');
+        toast.classList.remove('hidden');
+        setTimeout(() => { toast.classList.add('hidden'); }, 4000);
+        // Reload to update status badge (draft → sent)
+        setTimeout(() => { window.location.reload(); }, 1500);
+      } finally {
+        btn.textContent = 'Send to client';
         btn.disabled = false;
       }
     }

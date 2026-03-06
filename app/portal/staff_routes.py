@@ -15,6 +15,10 @@ from .auth import (
     hash_password, log_audit, require_admin, require_staff, verify_password,
 )
 from .storage import presign_get
+from .email import (
+    check_domain_verification, render_email, render_subject, send_email,
+    verify_domain, DEFAULT_BODY,
+)
 
 router = APIRouter(prefix="/portal/staff", tags=["portal-staff"])
 
@@ -269,7 +273,7 @@ async def staff_template_edit(
     conn: asyncpg.Connection = Depends(get_conn),
 ):
     tmpl = await conn.fetchrow(
-        "SELECT id, name, description FROM portal.templates WHERE id = $1::uuid AND tenant_id = $2::uuid",
+        "SELECT id, name, description, email_subject, email_body FROM portal.templates WHERE id = $1::uuid AND tenant_id = $2::uuid",
         template_id,
         staff["tenant_id"],
     )
@@ -306,13 +310,17 @@ async def update_template(
     template_id: str,
     name: str = Form(...),
     description: str = Form(default=""),
+    email_subject: str = Form(default=""),
+    email_body: str = Form(default=""),
     staff: dict = Depends(require_admin),
     conn: asyncpg.Connection = Depends(get_conn),
 ):
     await conn.execute(
-        "UPDATE portal.templates SET name = $1, description = $2 WHERE id = $3::uuid AND tenant_id = $4::uuid",
+        "UPDATE portal.templates SET name = $1, description = $2, email_subject = $3, email_body = $4 WHERE id = $5::uuid AND tenant_id = $6::uuid",
         name.strip(),
         description.strip() or None,
+        email_subject.strip() or None,
+        email_body.strip() or None,
         template_id,
         staff["tenant_id"],
     )
@@ -645,6 +653,7 @@ async def staff_settings(
 ):
     brand = await get_tenant_brand(conn, staff["tenant_id"])
     users = []
+    email_config = None
     if tab == "users":
         rows = await conn.fetch(
             """SELECT id, email, full_name, role, is_active, last_login_at, created_at
@@ -652,6 +661,12 @@ async def staff_settings(
             staff["tenant_id"],
         )
         users = [dict(r) for r in rows]
+    elif tab == "email":
+        row = await conn.fetchrow(
+            "SELECT sending_domain, sending_from_email, domain_verified FROM portal.tenants WHERE id = $1::uuid",
+            staff["tenant_id"],
+        )
+        email_config = dict(row) if row else {}
     return templates.TemplateResponse("staff_settings.html", {
         "request": request,
         "staff": staff,
@@ -659,6 +674,7 @@ async def staff_settings(
         "saved": request.query_params.get("saved"),
         "tab": tab or "branding",
         "users": users,
+        "email_config": email_config,
     })
 
 
@@ -682,6 +698,61 @@ async def update_settings(
         staff["tenant_id"],
     )
     return RedirectResponse(url="/portal/staff/settings?saved=1", status_code=303)
+
+
+@router.post("/settings/email")
+async def update_email_settings(
+    sending_domain: str = Form(default=""),
+    sending_from_email: str = Form(default=""),
+    staff: dict = Depends(require_admin),
+    conn: asyncpg.Connection = Depends(get_conn),
+):
+    domain = sending_domain.strip().lower()
+    from_email = sending_from_email.strip().lower()
+
+    dkim_records = []
+    if domain:
+        dkim_records = verify_domain(domain)
+
+    await conn.execute(
+        """
+        UPDATE portal.tenants
+        SET sending_domain = $1, sending_from_email = $2, domain_verified = false
+        WHERE id = $3::uuid
+        """,
+        domain or None,
+        from_email or None,
+        staff["tenant_id"],
+    )
+
+    if dkim_records:
+        import json
+        return RedirectResponse(
+            url=f"/portal/staff/settings?tab=email&saved=1&dns={json.dumps(dkim_records)}",
+            status_code=303,
+        )
+    return RedirectResponse(url="/portal/staff/settings?tab=email&saved=1", status_code=303)
+
+
+@router.post("/settings/email/check-verification")
+async def check_email_verification_route(
+    staff: dict = Depends(require_admin),
+    conn: asyncpg.Connection = Depends(get_conn),
+):
+    tenant = await conn.fetchrow(
+        "SELECT sending_domain FROM portal.tenants WHERE id = $1::uuid",
+        staff["tenant_id"],
+    )
+    if not tenant or not tenant["sending_domain"]:
+        return JSONResponse({"error": "No domain configured"}, status_code=400)
+
+    verified = check_domain_verification(tenant["sending_domain"])
+    if verified:
+        await conn.execute(
+            "UPDATE portal.tenants SET domain_verified = true WHERE id = $1::uuid",
+            staff["tenant_id"],
+        )
+    return {"verified": verified}
 
 
 # ---------------------------------------------------------------------------
@@ -945,6 +1016,13 @@ async def create_request(
             client_id,
             due_val,
         )
+
+        # Store template reference for email customisation
+        if template_id.strip():
+            await conn.execute(
+                "UPDATE portal.doc_requests SET template_id = $1::uuid WHERE id = $2::uuid",
+                template_id, request_id,
+            )
 
         # Clone items from template
         if template_id.strip():
@@ -1239,6 +1317,14 @@ async def staff_request_detail(
                 pass
 
     brand = await get_tenant_brand(conn, staff["tenant_id"])
+
+    # Check if email is configured for this tenant
+    email_cfg = await conn.fetchrow(
+        "SELECT sending_from_email, domain_verified FROM portal.tenants WHERE id = $1::uuid",
+        staff["tenant_id"],
+    )
+    email_enabled = bool(email_cfg and email_cfg["domain_verified"] and email_cfg["sending_from_email"])
+
     return templates.TemplateResponse("staff_detail.html", {
         "request": request,
         "req": dict(req),
@@ -1251,6 +1337,7 @@ async def staff_request_detail(
         "staff": staff,
         "brand": brand,
         "all_approved": all_approved,
+        "email_enabled": email_enabled,
     })
 
 
@@ -1322,6 +1409,39 @@ async def staff_download_completed(
 # Generate magic link (AJAX — returns JSON)
 # ---------------------------------------------------------------------------
 
+async def _create_access_token(
+    conn: asyncpg.Connection, tenant_id: str, request_id: str, staff_id: str, expires_days: int = 30,
+) -> tuple[str, datetime]:
+    """Create a magic-link token for a request. Returns (raw_token, expires_at)."""
+    raw_token = secrets.token_urlsafe(32)
+    token_hash = _hash_token(raw_token)
+    expires_at = _now_utc() + timedelta(days=expires_days)
+    await conn.execute(
+        """
+        INSERT INTO portal.request_access_tokens
+            (tenant_id, request_id, token_hash, expires_at)
+        VALUES ($1::uuid, $2::uuid, $3, $4)
+        """,
+        tenant_id, request_id, token_hash, expires_at,
+    )
+    # Advance draft → sent on first link
+    await conn.execute(
+        """
+        UPDATE portal.doc_requests
+        SET status = 'sent'::public.request_status,
+            sent_at = CASE WHEN sent_at IS NULL THEN now() ELSE sent_at END
+        WHERE id = $1::uuid AND tenant_id = $2::uuid
+          AND status = 'draft'::public.request_status
+        """,
+        request_id, tenant_id,
+    )
+    await log_audit(
+        conn, tenant_id=tenant_id, event_type="access_link_created",
+        actor="staff", actor_id=staff_id, request_id=request_id,
+    )
+    return raw_token, expires_at
+
+
 @router.post("/requests/{request_id}/link")
 async def generate_link(
     request_id: str,
@@ -1332,53 +1452,107 @@ async def generate_link(
     async with conn.transaction():
         req = await conn.fetchrow(
             "SELECT id FROM portal.doc_requests WHERE id = $1::uuid AND tenant_id = $2::uuid",
-            request_id,
-            staff["tenant_id"],
+            request_id, staff["tenant_id"],
         )
         if not req:
             return JSONResponse({"error": "Request not found"}, status_code=404)
-
-        raw_token = secrets.token_urlsafe(32)
-        token_hash = _hash_token(raw_token)
-        expires_at = _now_utc() + timedelta(days=expires_days)
-
-        await conn.execute(
-            """
-            INSERT INTO portal.request_access_tokens
-                (tenant_id, request_id, token_hash, expires_at)
-            VALUES ($1::uuid, $2::uuid, $3, $4)
-            """,
-            staff["tenant_id"],
-            request_id,
-            token_hash,
-            expires_at,
+        raw_token, expires_at = await _create_access_token(
+            conn, staff["tenant_id"], request_id, staff["staff_id"], expires_days,
         )
-
-        # Advance status from draft → sent on first link generation
-        await conn.execute(
-            """
-            UPDATE portal.doc_requests
-            SET status = 'sent'::public.request_status,
-                sent_at = CASE WHEN sent_at IS NULL THEN now() ELSE sent_at END
-            WHERE id = $1::uuid
-              AND tenant_id = $2::uuid
-              AND status = 'draft'::public.request_status
-            """,
-            request_id,
-            staff["tenant_id"],
-        )
-
-        await log_audit(
-            conn,
-            tenant_id=staff["tenant_id"],
-            event_type="access_link_created",
-            actor="staff",
-            actor_id=staff["staff_id"],
-            request_id=request_id,
-        )
-
     link = f"{settings.portal_base_url}/portal/r/{raw_token}/view"
     return {"link": link, "expires_at": expires_at.isoformat()}
+
+
+@router.post("/requests/{request_id}/send-email")
+async def send_email_to_client(
+    request_id: str,
+    staff: dict = Depends(require_staff),
+    conn: asyncpg.Connection = Depends(get_conn),
+):
+    """Generate a magic link and email it to the client."""
+    async with conn.transaction():
+        row = await conn.fetchrow(
+            """
+            SELECT r.id, r.due_at, r.template_id,
+                   c.full_name AS client_name, c.email AS client_email,
+                   t.sending_from_email, t.domain_verified,
+                   t.brand_name, t.brand_color, t.logo_url
+            FROM portal.doc_requests r
+            JOIN portal.clients c ON c.id = r.client_id
+            JOIN portal.tenants t ON t.id = r.tenant_id
+            WHERE r.id = $1::uuid AND r.tenant_id = $2::uuid
+            """,
+            request_id, staff["tenant_id"],
+        )
+        if not row:
+            return JSONResponse({"error": "Request not found"}, status_code=404)
+        if not row["domain_verified"] or not row["sending_from_email"]:
+            return JSONResponse(
+                {"error": "Email not configured. Go to Settings → Email to set up your sending domain."},
+                status_code=400,
+            )
+
+        raw_token, expires_at = await _create_access_token(
+            conn, staff["tenant_id"], request_id, staff["staff_id"],
+        )
+
+    magic_link = f"{settings.portal_base_url}/portal/r/{raw_token}/view"
+
+    # Look up template email customisation
+    custom_subject = None
+    custom_body = None
+    if row["template_id"]:
+        tmpl = await conn.fetchrow(
+            "SELECT email_subject, email_body FROM portal.templates WHERE id = $1::uuid",
+            row["template_id"],
+        )
+        if tmpl:
+            custom_subject = tmpl["email_subject"]
+            custom_body = tmpl["email_body"]
+
+    brand_name = row["brand_name"] or "HumTech"
+    client_name = (row["client_name"] or "").split()[0] if row["client_name"] else "there"
+    due_str = row["due_at"].strftime("%d %b %Y") if row["due_at"] else None
+
+    subject = render_subject(
+        custom_subject=custom_subject,
+        brand_name=brand_name,
+        client_name=row["client_name"] or "",
+    )
+    html_body = render_email(
+        client_name=client_name,
+        magic_link=magic_link,
+        due_date=due_str,
+        body_text=custom_body or DEFAULT_BODY,
+        brand_name=brand_name,
+        brand_color=row["brand_color"] or "#111827",
+        logo_url=row["logo_url"],
+    )
+
+    ses_message_id = send_email(
+        to_email=row["client_email"],
+        from_email=row["sending_from_email"],
+        subject=subject,
+        html_body=html_body,
+    )
+
+    # Log the send
+    await conn.execute(
+        """
+        INSERT INTO portal.email_sends
+            (tenant_id, request_id, recipient_email, from_email, subject, ses_message_id)
+        VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6)
+        """,
+        staff["tenant_id"], request_id,
+        row["client_email"], row["sending_from_email"],
+        subject, ses_message_id,
+    )
+    await log_audit(
+        conn, tenant_id=staff["tenant_id"], event_type="magic_link_emailed",
+        actor="staff", actor_id=staff["staff_id"], request_id=request_id,
+    )
+
+    return {"success": True, "email": row["client_email"]}
 
 
 # ---------------------------------------------------------------------------

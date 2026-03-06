@@ -50,6 +50,37 @@
             />
           </div>
         </div>
+
+        {% if tmpl %}
+        <div class="border-t border-gray-100 mt-5 pt-5">
+          <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Email customisation</h3>
+          <p class="text-xs text-gray-400 mb-4">Optional — customise the email sent when sharing this request with clients. Leave blank for defaults.</p>
+          <div class="space-y-4">
+            <div>
+              <label class="block text-xs font-medium text-gray-600 mb-1">Email subject</label>
+              <input
+                type="text"
+                name="email_subject"
+                value="{{ tmpl.email_subject or '' }}"
+                placeholder="Documents requested — {{ '{{' }} brand_name {{ '}}' }}"
+                class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+              />
+              <p class="text-xs text-gray-400 mt-1">Supports {{ '{{' }} brand_name {{ '}}' }} and {{ '{{' }} client_name {{ '}}' }} placeholders.</p>
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-gray-600 mb-1">Email body</label>
+              <textarea
+                name="email_body"
+                rows="3"
+                placeholder="We need a few documents from you. Please click the link below to view what's needed and upload securely."
+                class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+              >{{ tmpl.email_body or '' }}</textarea>
+              <p class="text-xs text-gray-400 mt-1">The main body text above the "View & Upload Documents" button.</p>
+            </div>
+          </div>
+        </div>
+        {% endif %}
+
         <div class="mt-4">
           <button
             type="submit"
@@ -101,9 +132,10 @@
               <p class="text-xs text-gray-400">Document attached</p>
               <button
                 type="button"
-                onclick="openSigPosModal('{{ item.id }}')"
+                onclick="openZoneBuilder('{{ item.id }}')"
                 class="text-xs font-medium text-purple-600 hover:underline"
-              >{% if item.sig_page is not none %}Edit signature zone (page {{ item.sig_page + 1 }}){% else %}Set signature position{% endif %}</button>
+                id="zone-btn-{{ item.id }}"
+              >Edit zones ({{ item.zone_count }} defined)</button>
             </div>
             {% endif %}
           </div>
@@ -176,33 +208,59 @@
 
   </div>
 
-  <!-- Signature position modal -->
-  <div id="sigPosModal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center">
-    <div class="bg-white rounded-xl shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] flex flex-col">
-      <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-        <h2 class="text-sm font-semibold">Place signature zone</h2>
-        <div class="flex items-center gap-3">
-          <button id="prevPage" onclick="changePage(-1)" class="text-xs border border-gray-200 px-2 py-1 rounded hover:bg-gray-50">&larr; Prev</button>
-          <span id="pageInfo" class="text-xs text-gray-500">Page 1 / 1</span>
-          <button id="nextPage" onclick="changePage(1)" class="text-xs border border-gray-200 px-2 py-1 rounded hover:bg-gray-50">Next &rarr;</button>
-        </div>
-      </div>
-      <div class="flex-1 overflow-auto p-4 flex justify-center bg-gray-100" id="pdfViewport">
-        <div id="pdfContainer" class="relative inline-block">
-          <canvas id="pdfCanvas"></canvas>
-          <div id="sigZone"
-               class="absolute border-2 border-dashed border-purple-500 bg-purple-100/30 cursor-move hidden"
-               style="min-width: 60px; min-height: 30px;">
-            <div class="absolute -bottom-1 -right-1 w-3 h-3 bg-purple-500 rounded-sm cursor-se-resize" id="sigResize"></div>
-            <p class="text-purple-600 text-xs text-center mt-1 pointer-events-none select-none">Sign here</p>
+  <!-- Zone builder modal -->
+  <div id="zoneBuilderModal" class="hidden fixed inset-0 bg-black/50 z-50 flex flex-col">
+    <div class="bg-white flex flex-col h-full">
+      <!-- Header -->
+      <div class="px-5 py-3 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
+        <h2 class="text-sm font-semibold" id="zb-title">Zone Builder</h2>
+        <div class="flex items-center gap-4">
+          <!-- Type toolbar -->
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-gray-400">Add:</span>
+            <button onclick="setActiveType('signature')" id="tb-signature"
+              class="text-xs px-2.5 py-1 rounded-full border-2 border-purple-400 bg-purple-50 text-purple-700 font-medium">Signature</button>
+            <button onclick="setActiveType('text')" id="tb-text"
+              class="text-xs px-2.5 py-1 rounded-full border border-gray-200 text-gray-500">Text</button>
+            <button onclick="setActiveType('date')" id="tb-date"
+              class="text-xs px-2.5 py-1 rounded-full border border-gray-200 text-gray-500">Date</button>
+          </div>
+          <div class="h-4 w-px bg-gray-200"></div>
+          <!-- Page nav -->
+          <div class="flex items-center gap-2">
+            <button onclick="zbChangePage(-1)" class="text-xs border border-gray-200 px-2 py-1 rounded hover:bg-gray-50">&larr;</button>
+            <span id="zb-page-info" class="text-xs text-gray-500">Page 1 / 1</span>
+            <button onclick="zbChangePage(1)" class="text-xs border border-gray-200 px-2 py-1 rounded hover:bg-gray-50">&rarr;</button>
           </div>
         </div>
       </div>
-      <div class="px-5 py-4 border-t border-gray-100 flex items-center justify-between">
-        <p class="text-xs text-gray-400">Click on the document to place the signature zone. Drag to move, resize from the corner.</p>
+
+      <!-- Body -->
+      <div class="flex-1 flex overflow-hidden">
+        <!-- PDF viewport -->
+        <div class="flex-1 overflow-auto bg-gray-100 flex justify-center p-4" id="zb-viewport">
+          <div id="zb-pdf-container" class="relative inline-block" style="user-select:none;">
+            <canvas id="zb-canvas"></canvas>
+            <!-- Zone divs rendered here dynamically -->
+          </div>
+        </div>
+        <!-- Sidebar -->
+        <div class="w-56 border-l border-gray-200 bg-white flex flex-col flex-shrink-0">
+          <div class="px-3 py-2 border-b border-gray-100">
+            <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Zones</h3>
+          </div>
+          <div id="zb-sidebar" class="flex-1 overflow-y-auto divide-y divide-gray-50">
+            <p class="px-3 py-4 text-xs text-gray-400 text-center" id="zb-sidebar-empty">Click on the document to add zones</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <div class="px-5 py-3 border-t border-gray-200 flex items-center justify-between flex-shrink-0">
+        <p class="text-xs text-gray-400">Click to place &middot; Arrow keys to move (Shift = 5%) &middot; Delete to remove</p>
         <div class="flex items-center gap-3">
-          <button onclick="closeSigPosModal()" class="text-xs text-gray-500 hover:text-gray-900">Cancel</button>
-          <button onclick="saveSigPosition()" class="text-xs font-medium bg-gray-900 text-white px-4 py-2 rounded-lg hover:bg-gray-700">Save position</button>
+          <button onclick="closeZoneBuilder()" class="text-xs text-gray-500 hover:text-gray-900">Cancel</button>
+          <button onclick="saveAllZones()" class="text-xs font-medium bg-gray-900 text-white px-4 py-2 rounded-lg hover:bg-gray-700">Save all zones</button>
         </div>
       </div>
     </div>
@@ -226,11 +284,12 @@
       sig_y: {{ item.sig_y if item.sig_y is not none else 'null' }},
       sig_w: {{ item.sig_w if item.sig_w is not none else 'null' }},
       sig_h: {{ item.sig_h if item.sig_h is not none else 'null' }},
+      zone_count: {{ item.zone_count }},
     };
     {% endfor %}
 
     // -----------------------------------------------------------------------
-    // Basic item CRUD
+    // Basic item CRUD (unchanged)
     // -----------------------------------------------------------------------
 
     function toggleFileUpload() {
@@ -294,10 +353,11 @@
         ? '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700 flex-shrink-0">Sign</span>'
         : '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500 flex-shrink-0">Upload</span>';
 
-      const sigBtn = (item.item_type === 'signature' && item.file_key)
+      const zoneBtn = (item.item_type === 'signature' && item.file_key)
         ? `<div class="flex items-center gap-3">
              <p class="text-xs text-gray-400">Document attached</p>
-             <button type="button" onclick="openSigPosModal('${item.id}')" class="text-xs font-medium text-purple-600 hover:underline">Set signature position</button>
+             <button type="button" onclick="openZoneBuilder('${item.id}')" id="zone-btn-${item.id}"
+               class="text-xs font-medium text-purple-600 hover:underline">Edit zones (0 defined)</button>
            </div>` : '';
 
       const list = document.getElementById('items-list');
@@ -315,7 +375,7 @@
           <input type="text" value="${escHtml(item.instructions || '')}" placeholder="Instructions (optional)"
             class="w-full text-xs border border-gray-100 rounded-lg px-3 py-1.5 text-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-300"
             onblur="updateItem('${item.id}', this)" data-field="instructions" />
-          ${sigBtn}
+          ${zoneBtn}
         </div>
         <div class="flex items-center gap-3 pt-1.5 flex-shrink-0">
           <label class="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer">
@@ -330,6 +390,7 @@
         title: item.title, instructions: item.instructions || '', required: item.required,
         item_type: item.item_type, file_key: item.file_key || '',
         sig_page: null, sig_x: null, sig_y: null, sig_w: null, sig_h: null,
+        zone_count: 0,
       };
       titleEl.value = '';
       instrEl.value = '';
@@ -341,9 +402,9 @@
       titleEl.focus();
       updateItemCount();
 
-      // Auto-open position picker for new signature items
+      // Auto-open zone builder for new signature items
       if (item.item_type === 'signature' && item.file_key) {
-        setTimeout(() => openSigPosModal(item.id), 300);
+        setTimeout(() => openZoneBuilder(item.id), 300);
       }
     }
 
@@ -387,198 +448,595 @@
     }
 
     // -----------------------------------------------------------------------
-    // Signature position modal (PDF.js + drag/resize)
+    // Zone builder
     // -----------------------------------------------------------------------
 
-    let modalItemId = null;
-    let pdfDoc = null;
-    let currentPage = 1;
-    let sigData = { page: 0, x: 30, y: 80, w: 25, h: 8 }; // percentages
-    let canvasW = 0, canvasH = 0;
-    let dragging = false, resizing = false, dragOff = { x: 0, y: 0 };
+    const ZONE_DEFAULTS = {
+      signature: { w: 25, h: 8, label: 'Signature' },
+      text:      { w: 20, h: 4, label: 'Text field' },
+      date:      { w: 15, h: 4, label: 'Date' },
+    };
+    const ZONE_COLORS = {
+      signature: { border: 'border-purple-500', bg: 'bg-purple-100/30', text: 'text-purple-700', ring: 'ring-purple-400',
+                   tbBorder: 'border-purple-400', tbBg: 'bg-purple-50', tbText: 'text-purple-700' },
+      text:      { border: 'border-blue-500', bg: 'bg-blue-100/30', text: 'text-blue-700', ring: 'ring-blue-400',
+                   tbBorder: 'border-blue-400', tbBg: 'bg-blue-50', tbText: 'text-blue-700' },
+      date:      { border: 'border-green-500', bg: 'bg-green-100/30', text: 'text-green-700', ring: 'ring-green-400',
+                   tbBorder: 'border-green-400', tbBg: 'bg-green-50', tbText: 'text-green-700' },
+    };
+    const MIN_ZONE_PCT = { w: 5, h: 2 };
 
-    async function openSigPosModal(itemId) {
-      modalItemId = itemId;
-      const state = itemState[itemId];
-      if (!state || !state.file_key) { alert('No document uploaded'); return; }
+    let zbOpen = false;
+    let zbItemId = null;
+    let zbPdfDoc = null;
+    let zbCurrentPage = 1;
+    let zbCanvasW = 0, zbCanvasH = 0;
+    let zbActiveType = 'signature';
+    let zbSelectedId = null;
+    const zbZones = {};  // id -> zone object
 
-      document.getElementById('sigPosModal').classList.remove('hidden');
-      document.getElementById('sigZone').classList.add('hidden');
+    // Drag/resize state
+    let zbDragging = null;   // { zoneId, offX, offY }
+    let zbResizing = null;   // { zoneId, handle, startX, startY, startZone: {x,y,w,h} }
+    let zbJustDragged = false; // prevents canvas click after drag
 
-      // Load existing position or defaults
-      if (state.sig_page != null) {
-        sigData = { page: state.sig_page, x: state.sig_x, y: state.sig_y, w: state.sig_w, h: state.sig_h };
-        currentPage = state.sig_page + 1;
-      } else {
-        sigData = { page: 0, x: 30, y: 80, w: 25, h: 8 };
-        currentPage = 1;
+    function setActiveType(type) {
+      zbActiveType = type;
+      for (const t of ['signature', 'text', 'date']) {
+        const btn = document.getElementById('tb-' + t);
+        const c = ZONE_COLORS[t];
+        if (t === type) {
+          btn.className = `text-xs px-2.5 py-1 rounded-full border-2 ${c.tbBorder} ${c.tbBg} ${c.tbText} font-medium`;
+        } else {
+          btn.className = 'text-xs px-2.5 py-1 rounded-full border border-gray-200 text-gray-500';
+        }
+      }
+    }
+
+    async function openZoneBuilder(itemId) {
+      zbItemId = itemId;
+      zbSelectedId = null;
+      zbActiveType = 'signature';
+      setActiveType('signature');
+
+      // Clear zones
+      for (const k of Object.keys(zbZones)) delete zbZones[k];
+
+      // Load existing zones from server
+      const res = await fetch(`/portal/staff/templates/${TEMPLATE_ID}/items/${itemId}/zones`);
+      const data = await res.json();
+      for (const z of data.zones) {
+        zbZones[z.id] = { ...z, _new: false, _dirty: false, _deleted: false };
       }
 
+      // Load PDF
       const url = `/portal/staff/templates/${TEMPLATE_ID}/items/${itemId}/pdf-bytes`;
+      const state = itemState[itemId];
+      document.getElementById('zb-title').textContent = 'Zone Builder — ' + (state ? state.title : '');
+
       try {
-        pdfDoc = await pdfjsLib.getDocument(url).promise;
-        await renderPage(currentPage);
+        zbPdfDoc = await pdfjsLib.getDocument(url).promise;
+        zbCurrentPage = 1;
+        zbOpen = true;
+        document.getElementById('zoneBuilderModal').classList.remove('hidden');
+        await zbRenderPage(zbCurrentPage);
+        zbRenderSidebar();
       } catch (err) {
         alert('Failed to load PDF: ' + err.message);
-        closeSigPosModal();
       }
     }
 
-    function closeSigPosModal() {
-      document.getElementById('sigPosModal').classList.add('hidden');
-      modalItemId = null;
-      pdfDoc = null;
+    function closeZoneBuilder() {
+      document.getElementById('zoneBuilderModal').classList.add('hidden');
+      zbOpen = false;
+      zbItemId = null;
+      zbPdfDoc = null;
+      zbSelectedId = null;
+      // Remove all zone divs
+      const container = document.getElementById('zb-pdf-container');
+      container.querySelectorAll('.zone-div').forEach(el => el.remove());
     }
 
-    async function renderPage(num) {
-      const page = await pdfDoc.getPage(num);
+    async function zbRenderPage(num) {
+      const page = await zbPdfDoc.getPage(num);
       const viewport = page.getViewport({ scale: 1.5 });
-      const canvas = document.getElementById('pdfCanvas');
+      const canvas = document.getElementById('zb-canvas');
       canvas.width = viewport.width;
       canvas.height = viewport.height;
-      canvasW = viewport.width;
-      canvasH = viewport.height;
+      zbCanvasW = viewport.width;
+      zbCanvasH = viewport.height;
       const ctx = canvas.getContext('2d');
       await page.render({ canvasContext: ctx, viewport }).promise;
 
-      document.getElementById('pageInfo').textContent = `Page ${num} / ${pdfDoc.numPages}`;
+      document.getElementById('zb-page-info').textContent = `Page ${num} / ${zbPdfDoc.numPages}`;
+      zbSelectedId = null;
+      zbRenderAllZones();
+    }
 
-      // Show zone if on correct page
-      const zone = document.getElementById('sigZone');
-      if (sigData.page === num - 1) {
-        zone.classList.remove('hidden');
-        positionZone();
-      } else {
-        zone.classList.add('hidden');
+    function zbChangePage(delta) {
+      if (!zbPdfDoc) return;
+      const next = zbCurrentPage + delta;
+      if (next < 1 || next > zbPdfDoc.numPages) return;
+      zbCurrentPage = next;
+      zbRenderPage(zbCurrentPage);
+    }
+
+    // -----------------------------------------------------------------------
+    // Zone rendering
+    // -----------------------------------------------------------------------
+
+    function zbRenderAllZones() {
+      const container = document.getElementById('zb-pdf-container');
+      container.querySelectorAll('.zone-div').forEach(el => el.remove());
+      for (const id of Object.keys(zbZones)) {
+        const z = zbZones[id];
+        if (z._deleted) continue;
+        if (z.page !== zbCurrentPage - 1) continue;
+        zbCreateZoneDiv(id);
       }
     }
 
-    function positionZone() {
-      const zone = document.getElementById('sigZone');
-      zone.style.left = (sigData.x / 100 * canvasW) + 'px';
-      zone.style.top = (sigData.y / 100 * canvasH) + 'px';
-      zone.style.width = (sigData.w / 100 * canvasW) + 'px';
-      zone.style.height = (sigData.h / 100 * canvasH) + 'px';
+    function zbCreateZoneDiv(id) {
+      const z = zbZones[id];
+      const c = ZONE_COLORS[z.zone_type] || ZONE_COLORS.text;
+      const container = document.getElementById('zb-pdf-container');
+
+      const div = document.createElement('div');
+      div.id = 'zd-' + id;
+      div.className = `zone-div absolute border-2 border-dashed ${c.border} ${c.bg} cursor-move flex items-center justify-center`;
+      div.style.left = pctToPx(z.x, zbCanvasW) + 'px';
+      div.style.top = pctToPx(z.y, zbCanvasH) + 'px';
+      div.style.width = pctToPx(z.w, zbCanvasW) + 'px';
+      div.style.height = pctToPx(z.h, zbCanvasH) + 'px';
+
+      if (id === zbSelectedId) {
+        div.classList.add('ring-2', 'ring-offset-1', c.ring);
+      }
+
+      // Label
+      const label = document.createElement('p');
+      label.className = `${c.text} text-xs text-center pointer-events-none select-none truncate px-1`;
+      label.textContent = z.label;
+      div.appendChild(label);
+
+      // Delete button (top-right, outside the box)
+      const delBtn = document.createElement('button');
+      delBtn.className = 'zone-delete-btn absolute -top-3 -right-3 w-5 h-5 bg-red-500 text-white rounded-full text-xs font-bold flex items-center justify-center hover:bg-red-600 cursor-pointer';
+      delBtn.textContent = '\u00d7';
+      delBtn.style.lineHeight = '1';
+      if (id !== zbSelectedId) delBtn.style.display = 'none';
+      delBtn.addEventListener('mousedown', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        zbDeleteZone(id);
+      });
+      div.appendChild(delBtn);
+
+      // Resize handles (4 corners)
+      for (const handle of ['nw', 'ne', 'sw', 'se']) {
+        const h = document.createElement('div');
+        h.className = `absolute w-3 h-3 bg-white border-2 ${c.border} rounded-sm cursor-${handle}-resize`;
+        h.dataset.handle = handle;
+        h.dataset.zoneId = id;
+        if (handle[0] === 'n') h.style.top = '-5px'; else h.style.bottom = '-5px';
+        if (handle[1] === 'w') h.style.left = '-5px'; else h.style.right = '-5px';
+        // Only show handles on selected zone
+        if (id !== zbSelectedId) h.style.display = 'none';
+        h.addEventListener('mousedown', onResizeMousedown);
+        div.appendChild(h);
+      }
+
+      div.addEventListener('mousedown', onZoneMousedown);
+      container.appendChild(div);
     }
 
-    function readZone() {
-      const zone = document.getElementById('sigZone');
-      sigData.x = parseFloat(zone.style.left) / canvasW * 100;
-      sigData.y = parseFloat(zone.style.top) / canvasH * 100;
-      sigData.w = parseFloat(zone.style.width) / canvasW * 100;
-      sigData.h = parseFloat(zone.style.height) / canvasH * 100;
+    function zbUpdateZoneDiv(id) {
+      const z = zbZones[id];
+      const div = document.getElementById('zd-' + id);
+      if (!div) return;
+      div.style.left = pctToPx(z.x, zbCanvasW) + 'px';
+      div.style.top = pctToPx(z.y, zbCanvasH) + 'px';
+      div.style.width = pctToPx(z.w, zbCanvasW) + 'px';
+      div.style.height = pctToPx(z.h, zbCanvasH) + 'px';
     }
 
-    async function changePage(delta) {
-      if (!pdfDoc) return;
-      const next = currentPage + delta;
-      if (next < 1 || next > pdfDoc.numPages) return;
-      currentPage = next;
-      await renderPage(currentPage);
+    function zbSelectZone(id) {
+      const prevId = zbSelectedId;
+      zbSelectedId = id;
+      // Toggle selection CSS without destroying/recreating divs
+      if (prevId && prevId !== id) zbToggleZoneSelection(prevId, false);
+      if (id) zbToggleZoneSelection(id, true);
+      zbRenderSidebar();
     }
 
-    // Click on canvas to place zone
-    document.getElementById('pdfCanvas').addEventListener('click', function(e) {
-      if (dragging || resizing) return;
+    function zbToggleZoneSelection(id, selected) {
+      const div = document.getElementById('zd-' + id);
+      if (!div) return;
+      const z = zbZones[id];
+      if (!z) return;
+      const c = ZONE_COLORS[z.zone_type] || ZONE_COLORS.text;
+      // Ring
+      if (selected) {
+        div.classList.add('ring-2', 'ring-offset-1', c.ring);
+      } else {
+        div.classList.remove('ring-2', 'ring-offset-1');
+        for (const col of Object.values(ZONE_COLORS)) div.classList.remove(col.ring);
+      }
+      // Resize handles + delete button visibility
+      div.querySelectorAll('[data-handle]').forEach(h => h.style.display = selected ? '' : 'none');
+      const delBtn = div.querySelector('.zone-delete-btn');
+      if (delBtn) delBtn.style.display = selected ? '' : 'none';
+    }
+
+    // -----------------------------------------------------------------------
+    // Sidebar
+    // -----------------------------------------------------------------------
+
+    function zbRenderSidebar() {
+      const sidebar = document.getElementById('zb-sidebar');
+      const emptyMsg = document.getElementById('zb-sidebar-empty');
+      const allZones = Object.values(zbZones).filter(z => !z._deleted);
+
+      if (allZones.length === 0) {
+        sidebar.innerHTML = '<p class="px-3 py-4 text-xs text-gray-400 text-center" id="zb-sidebar-empty">Click on the document to add zones</p>';
+        return;
+      }
+
+      allZones.sort((a, b) => a.sort_order - b.sort_order);
+      let html = '';
+      for (const z of allZones) {
+        const c = ZONE_COLORS[z.zone_type] || ZONE_COLORS.text;
+        const selected = z.id === zbSelectedId;
+        const bgClass = selected ? 'bg-gray-50' : '';
+        html += `
+          <div class="px-3 py-2 ${bgClass} cursor-pointer hover:bg-gray-50" onclick="zbSelectZoneAndNav('${z.id}')">
+            <div class="flex items-center gap-2 mb-1">
+              <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ${c.bg} ${c.text} ${c.border} border">${z.zone_type}</span>
+              <span class="text-[10px] text-gray-400">p.${z.page + 1}</span>
+              <button onclick="event.stopPropagation(); zbDeleteZone('${z.id}')" class="ml-auto text-[10px] text-gray-300 hover:text-red-500">&times;</button>
+            </div>
+            <input type="text" value="${escHtml(z.label)}" data-zone-id="${z.id}"
+              class="w-full text-xs border border-gray-100 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-gray-300"
+              onclick="event.stopPropagation()"
+              onblur="zbUpdateLabel('${z.id}', this.value)" />
+          </div>`;
+      }
+      sidebar.innerHTML = html;
+    }
+
+    function zbSelectZoneAndNav(id) {
+      const z = zbZones[id];
+      if (!z) return;
+      if (z.page !== zbCurrentPage - 1) {
+        zbCurrentPage = z.page + 1;
+        zbRenderPage(zbCurrentPage).then(() => {
+          zbSelectedId = id;
+          zbRenderAllZones();
+          zbRenderSidebar();
+        });
+      } else {
+        zbSelectZone(id);
+      }
+    }
+
+    function zbUpdateLabel(id, value) {
+      const z = zbZones[id];
+      if (!z) return;
+      z.label = value.trim() || ZONE_DEFAULTS[z.zone_type].label;
+      z._dirty = true;
+      // Update div label
+      const div = document.getElementById('zd-' + id);
+      if (div) {
+        const p = div.querySelector('p');
+        if (p) p.textContent = z.label;
+      }
+    }
+
+    function zbDeleteZone(id) {
+      const z = zbZones[id];
+      if (!z) return;
+      z._deleted = true;
+      const div = document.getElementById('zd-' + id);
+      if (div) div.remove();
+      if (zbSelectedId === id) zbSelectedId = null;
+      zbRenderSidebar();
+    }
+
+    // -----------------------------------------------------------------------
+    // Canvas click — place new zone
+    // -----------------------------------------------------------------------
+
+    document.getElementById('zb-canvas').addEventListener('click', function(e) {
+      if (!zbOpen) return;
+      if (zbDragging || zbResizing || zbJustDragged) return;
+
       const rect = this.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
-      const scaleX = canvasW / rect.width;
-      const scaleY = canvasH / rect.height;
+      const scaleX = zbCanvasW / rect.width;
+      const scaleY = zbCanvasH / rect.height;
+      const xPct = ((e.clientX - rect.left) * scaleX / zbCanvasW) * 100;
+      const yPct = ((e.clientY - rect.top) * scaleY / zbCanvasH) * 100;
 
-      sigData.page = currentPage - 1;
-      sigData.x = (x * scaleX) / canvasW * 100;
-      sigData.y = (y * scaleY) / canvasH * 100;
-      // Keep width/height, but clamp if off-page
-      if (sigData.x + sigData.w > 100) sigData.w = 100 - sigData.x;
-      if (sigData.y + sigData.h > 100) sigData.h = 100 - sigData.y;
+      const defaults = ZONE_DEFAULTS[zbActiveType];
+      let w = defaults.w, h = defaults.h;
+      let x = xPct, y = yPct;
 
-      const zone = document.getElementById('sigZone');
-      zone.classList.remove('hidden');
-      positionZone();
+      // Clamp to canvas
+      if (x + w > 100) w = 100 - x;
+      if (y + h > 100) h = 100 - y;
+      if (x < 0) x = 0;
+      if (y < 0) y = 0;
+
+      const id = 'new-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6);
+      const maxOrder = Math.max(-1, ...Object.values(zbZones).filter(z => !z._deleted).map(z => z.sort_order));
+
+      zbZones[id] = {
+        id, zone_type: zbActiveType, label: defaults.label,
+        page: zbCurrentPage - 1, x: round2(x), y: round2(y), w: round2(w), h: round2(h),
+        sort_order: maxOrder + 1, required: true,
+        _new: true, _dirty: false, _deleted: false,
+      };
+
+      zbCreateZoneDiv(id);
+      // Select without full re-render (div was just created)
+      const prevId = zbSelectedId;
+      if (prevId) zbToggleZoneSelection(prevId, false);
+      zbSelectedId = id;
+      zbToggleZoneSelection(id, true);
+      zbRenderSidebar();
     });
 
-    // Drag zone
-    document.getElementById('sigZone').addEventListener('mousedown', function(e) {
-      if (e.target.id === 'sigResize') return;
-      e.preventDefault();
-      dragging = true;
-      const rect = this.getBoundingClientRect();
-      dragOff.x = e.clientX - rect.left;
-      dragOff.y = e.clientY - rect.top;
-    });
+    // -----------------------------------------------------------------------
+    // Zone drag
+    // -----------------------------------------------------------------------
 
-    // Resize handle
-    document.getElementById('sigResize').addEventListener('mousedown', function(e) {
+    function onZoneMousedown(e) {
+      // Don't start drag if clicking a resize handle or delete button
+      if (e.target.dataset.handle || e.target.classList.contains('zone-delete-btn')) return;
       e.preventDefault();
       e.stopPropagation();
-      resizing = true;
-    });
+
+      const div = e.currentTarget;
+      const id = div.id.replace('zd-', '');
+
+      // Capture rect BEFORE selection toggle (which no longer destroys DOM, but be safe)
+      const container = document.getElementById('zb-pdf-container');
+      const containerRect = container.getBoundingClientRect();
+      const scaleX = zbCanvasW / containerRect.width;
+      const scaleY = zbCanvasH / containerRect.height;
+      const zoneRect = div.getBoundingClientRect();
+
+      zbSelectZone(id);
+
+      zbDragging = {
+        zoneId: id,
+        offX: (e.clientX - zoneRect.left) * scaleX,
+        offY: (e.clientY - zoneRect.top) * scaleY,
+      };
+    }
+
+    // -----------------------------------------------------------------------
+    // Resize
+    // -----------------------------------------------------------------------
+
+    function onResizeMousedown(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      const handle = e.target.dataset.handle;
+      const id = e.target.dataset.zoneId;
+      const z = zbZones[id];
+      if (!z) return;
+
+      zbResizing = {
+        zoneId: id,
+        handle,
+        startX: e.clientX,
+        startY: e.clientY,
+        startZone: { x: z.x, y: z.y, w: z.w, h: z.h },
+      };
+    }
+
+    // -----------------------------------------------------------------------
+    // Global mouse handlers
+    // -----------------------------------------------------------------------
 
     document.addEventListener('mousemove', function(e) {
-      if (!dragging && !resizing) return;
-      const container = document.getElementById('pdfContainer');
-      const containerRect = container.getBoundingClientRect();
-      const zone = document.getElementById('sigZone');
-      const scaleX = canvasW / containerRect.width;
-      const scaleY = canvasH / containerRect.height;
+      if (!zbOpen) return;
 
-      if (dragging) {
-        let newX = (e.clientX - containerRect.left - dragOff.x) * scaleX;
-        let newY = (e.clientY - containerRect.top - dragOff.y) * scaleY;
-        const zw = parseFloat(zone.style.width);
-        const zh = parseFloat(zone.style.height);
-        newX = Math.max(0, Math.min(canvasW - zw, newX));
-        newY = Math.max(0, Math.min(canvasH - zh, newY));
-        zone.style.left = newX + 'px';
-        zone.style.top = newY + 'px';
+      const container = document.getElementById('zb-pdf-container');
+      const containerRect = container.getBoundingClientRect();
+      const scaleX = zbCanvasW / containerRect.width;
+      const scaleY = zbCanvasH / containerRect.height;
+
+      if (zbDragging) {
+        const z = zbZones[zbDragging.zoneId];
+        if (!z) return;
+        let newXpx = (e.clientX - containerRect.left) * scaleX - zbDragging.offX;
+        let newYpx = (e.clientY - containerRect.top) * scaleY - zbDragging.offY;
+        const wPx = pctToPx(z.w, zbCanvasW);
+        const hPx = pctToPx(z.h, zbCanvasH);
+        newXpx = Math.max(0, Math.min(zbCanvasW - wPx, newXpx));
+        newYpx = Math.max(0, Math.min(zbCanvasH - hPx, newYpx));
+        z.x = round2(newXpx / zbCanvasW * 100);
+        z.y = round2(newYpx / zbCanvasH * 100);
+        z._dirty = true;
+        zbUpdateZoneDiv(zbDragging.zoneId);
       }
-      if (resizing) {
-        let newW = (e.clientX - containerRect.left) * scaleX - parseFloat(zone.style.left);
-        let newH = (e.clientY - containerRect.top) * scaleY - parseFloat(zone.style.top);
-        newW = Math.max(60, Math.min(canvasW - parseFloat(zone.style.left), newW));
-        newH = Math.max(30, Math.min(canvasH - parseFloat(zone.style.top), newH));
-        zone.style.width = newW + 'px';
-        zone.style.height = newH + 'px';
+
+      if (zbResizing) {
+        const z = zbZones[zbResizing.zoneId];
+        if (!z) return;
+        const s = zbResizing.startZone;
+        const dxPct = (e.clientX - zbResizing.startX) * scaleX / zbCanvasW * 100;
+        const dyPct = (e.clientY - zbResizing.startY) * scaleY / zbCanvasH * 100;
+        const handle = zbResizing.handle;
+
+        let nx = s.x, ny = s.y, nw = s.w, nh = s.h;
+
+        if (handle === 'se') {
+          nw = s.w + dxPct;
+          nh = s.h + dyPct;
+        } else if (handle === 'sw') {
+          nx = s.x + dxPct;
+          nw = s.w - dxPct;
+          nh = s.h + dyPct;
+        } else if (handle === 'ne') {
+          ny = s.y + dyPct;
+          nw = s.w + dxPct;
+          nh = s.h - dyPct;
+        } else if (handle === 'nw') {
+          nx = s.x + dxPct;
+          ny = s.y + dyPct;
+          nw = s.w - dxPct;
+          nh = s.h - dyPct;
+        }
+
+        // Enforce minimum size
+        if (nw < MIN_ZONE_PCT.w) { nw = MIN_ZONE_PCT.w; if (handle === 'nw' || handle === 'sw') nx = s.x + s.w - MIN_ZONE_PCT.w; }
+        if (nh < MIN_ZONE_PCT.h) { nh = MIN_ZONE_PCT.h; if (handle === 'nw' || handle === 'ne') ny = s.y + s.h - MIN_ZONE_PCT.h; }
+
+        // Clamp to canvas
+        if (nx < 0) { nw += nx; nx = 0; }
+        if (ny < 0) { nh += ny; ny = 0; }
+        if (nx + nw > 100) nw = 100 - nx;
+        if (ny + nh > 100) nh = 100 - ny;
+
+        z.x = round2(nx);
+        z.y = round2(ny);
+        z.w = round2(nw);
+        z.h = round2(nh);
+        z._dirty = true;
+        zbUpdateZoneDiv(zbResizing.zoneId);
       }
     });
 
     document.addEventListener('mouseup', function() {
-      if (dragging || resizing) {
-        readZone();
-        dragging = false;
-        resizing = false;
+      if (zbDragging || zbResizing) {
+        // Set a brief flag so the canvas click handler doesn't fire after drag/resize
+        const wasDragging = !!zbDragging;
+        const wasResizing = !!zbResizing;
+        zbDragging = null;
+        zbResizing = null;
+        if (wasDragging || wasResizing) {
+          zbJustDragged = true;
+          setTimeout(() => { zbJustDragged = false; }, 50);
+        }
       }
     });
 
-    async function saveSigPosition() {
-      if (!modalItemId) return;
-      readZone();
+    // -----------------------------------------------------------------------
+    // Arrow keys
+    // -----------------------------------------------------------------------
 
-      const state = itemState[modalItemId];
-      state.sig_page = sigData.page;
-      state.sig_x = Math.round(sigData.x * 100) / 100;
-      state.sig_y = Math.round(sigData.y * 100) / 100;
-      state.sig_w = Math.round(sigData.w * 100) / 100;
-      state.sig_h = Math.round(sigData.h * 100) / 100;
+    document.addEventListener('keydown', function(e) {
+      if (!zbOpen || !zbSelectedId) return;
+      const z = zbZones[zbSelectedId];
+      if (!z || z._deleted) return;
 
-      const res = await fetch(`/portal/staff/templates/${TEMPLATE_ID}/items/${modalItemId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(state),
-      });
+      const step = e.shiftKey ? 5 : 1;
+      let handled = false;
 
-      if (!res.ok) { alert('Failed to save position'); return; }
+      if (e.key === 'ArrowLeft')  { z.x = Math.max(0, z.x - step); handled = true; }
+      if (e.key === 'ArrowRight') { z.x = Math.min(100 - z.w, z.x + step); handled = true; }
+      if (e.key === 'ArrowUp')    { z.y = Math.max(0, z.y - step); handled = true; }
+      if (e.key === 'ArrowDown')  { z.y = Math.min(100 - z.h, z.y + step); handled = true; }
 
-      // Update the button text in the item row
-      const row = document.getElementById(`row-${modalItemId}`);
-      if (row) {
-        const btn = row.querySelector('button[onclick*="openSigPosModal"]');
-        if (btn) btn.textContent = `Edit signature zone (page ${sigData.page + 1})`;
+      if (handled) {
+        e.preventDefault();
+        z.x = round2(z.x);
+        z.y = round2(z.y);
+        z._dirty = true;
+        zbUpdateZoneDiv(zbSelectedId);
+        return;
       }
 
-      closeSigPosModal();
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        // Don't delete if focus is on an input
+        if (document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA')) return;
+        e.preventDefault();
+        zbDeleteZone(zbSelectedId);
+      }
+    });
+
+    // -----------------------------------------------------------------------
+    // Save all zones
+    // -----------------------------------------------------------------------
+
+    async function saveAllZones() {
+      const saves = [];
+
+      for (const [id, z] of Object.entries(zbZones)) {
+        if (z._deleted && !z._new) {
+          saves.push(fetch(`/portal/staff/templates/${TEMPLATE_ID}/items/${zbItemId}/zones/${id}`, { method: 'DELETE' }));
+        } else if (z._deleted && z._new) {
+          // Never persisted, skip
+        } else if (z._new) {
+          saves.push(
+            fetch(`/portal/staff/templates/${TEMPLATE_ID}/items/${zbItemId}/zones`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                zone_type: z.zone_type, label: z.label, page: z.page,
+                x: z.x, y: z.y, w: z.w, h: z.h, required: z.required,
+              }),
+            })
+          );
+        } else if (z._dirty) {
+          saves.push(
+            fetch(`/portal/staff/templates/${TEMPLATE_ID}/items/${zbItemId}/zones/${id}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                zone_type: z.zone_type, label: z.label, page: z.page,
+                x: z.x, y: z.y, w: z.w, h: z.h, required: z.required,
+              }),
+            })
+          );
+        }
+      }
+
+      await Promise.all(saves);
+
+      // Update zone count badge in item row
+      const liveZones = Object.values(zbZones).filter(z => !z._deleted);
+      const count = liveZones.length;
+      if (itemState[zbItemId]) itemState[zbItemId].zone_count = count;
+      const btn = document.getElementById('zone-btn-' + zbItemId);
+      if (btn) btn.textContent = `Edit zones (${count} defined)`;
+
+      // Sync first signature zone to sig_* columns for client portal backward compat
+      const firstSig = liveZones.find(z => z.zone_type === 'signature');
+      const state = itemState[zbItemId];
+      if (state) {
+        if (firstSig) {
+          state.sig_page = firstSig.page;
+          state.sig_x = round2(firstSig.x);
+          state.sig_y = round2(firstSig.y);
+          state.sig_w = round2(firstSig.w);
+          state.sig_h = round2(firstSig.h);
+        } else {
+          state.sig_page = null;
+          state.sig_x = null;
+          state.sig_y = null;
+          state.sig_w = null;
+          state.sig_h = null;
+        }
+        // Persist sig_* to template item
+        await fetch(`/portal/staff/templates/${TEMPLATE_ID}/items/${zbItemId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(state),
+        });
+      }
+
+      closeZoneBuilder();
     }
+
+    // -----------------------------------------------------------------------
+    // Helpers
+    // -----------------------------------------------------------------------
+
+    function pctToPx(pct, dim) { return pct / 100 * dim; }
+    function round2(n) { return Math.round(n * 100) / 100; }
   </script>
 </body>
 </html>
