@@ -390,23 +390,6 @@ STEPS = [
 
 def main():
     payload = {
-        "parent_campaign": CAMPAIGN_ID,
-        "name": "Main Sequence",
-        "conditions": {
-            "crm_status": [],
-            "lead_activity": [],
-            "reply_contains": "",
-        },
-        "subsequence_schedule": {
-            "schedules": [
-                {
-                    "name": "Default",
-                    "timing": {"from": "08:00", "to": "17:00"},
-                    "days": {"1": True, "2": True, "3": True, "4": True, "5": True},
-                    "timezone": "Europe/Isle_of_Man",
-                }
-            ],
-        },
         "sequences": [
             {"steps": STEPS}
         ],
@@ -417,8 +400,8 @@ def main():
         json.dump(payload, f, ensure_ascii=False, indent=2)
     print(f"Payload written ({len(STEPS)} email steps)")
 
-    resp = httpx.post(
-        f"{BASE_URL}/subsequences",
+    resp = httpx.patch(
+        f"{BASE_URL}/campaigns/{CAMPAIGN_ID}",
         json=payload,
         headers={"Authorization": f"Bearer {API_KEY}"},
         timeout=30,
@@ -428,8 +411,9 @@ def main():
         raise SystemExit(1)
 
     result = resp.json()
-    print("SUCCESS - Subsequence created")
-    print(json.dumps(result, indent=2)[:2000])
+    steps_count = len(result.get("sequences", [{}])[0].get("steps", []))
+    print(f"SUCCESS - Campaign updated with {steps_count} email steps")
+    print(f"Campaign: {result.get('name')}")
 
 
 if __name__ == "__main__":
